@@ -1,0 +1,57 @@
+:root {
+    --setting-primary: #6575e8;
+    --setting-primary-hover: #5364d5;
+    --setting-background: #f7f8fc;
+    --setting-surface: #fff;
+    --setting-text: #202c4a;
+    --setting-muted: #78819d;
+    --setting-border: #e2e6ef;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--setting-background); color: var(--setting-text); font-family: Inter, "Be Vietnam Pro", sans-serif; font-size: 14px; line-height: 1.5; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+.app-container { display: flex; min-height: 100vh; }
+.main-content { width: calc(100% - var(--sidebar-width, 265px)); min-width: 0; min-height: 100vh; margin-left: var(--sidebar-width, 265px); padding: 34px clamp(20px, 4vw, 56px) 52px; }
+.page-header { margin: 0 0 28px; }
+.page-heading h1 { margin: 0 0 7px; font-size: 28px; line-height: 1.25; font-weight: 700; }
+.page-heading p { margin: 0; color: var(--setting-muted); font-size: 15px; }
+.settings-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 920px; }
+.settings-card { padding: 25px 28px 27px; background: var(--setting-surface); border: 1px solid var(--setting-border); border-radius: 15px; box-shadow: 0 4px 16px rgba(32, 44, 74, .035); }
+.settings-card-heading { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 23px; }
+.settings-icon { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; border-radius: 12px; background: #eef0ff; color: var(--setting-primary); }
+.settings-icon svg { width: 20px; height: 20px; }
+.settings-card-heading h2 { margin: 0 0 4px; font-size: 17px; font-weight: 650; }
+.settings-card-heading p { margin: 0; color: var(--setting-muted); font-size: 13px; }
+.settings-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px; }
+.settings-form label { margin-top: 7px; font-weight: 600; }
+.settings-form input { width: 100%; min-height: 46px; padding: 11px 13px; color: var(--setting-text); background: #fff; border: 1px solid var(--setting-border); border-radius: 9px; outline: none; transition: border-color .16s, box-shadow .16s; }
+.settings-form input::placeholder { color: #a3aabe; }
+.settings-form input:focus { border-color: var(--setting-primary); box-shadow: 0 0 0 3px rgba(101,117,232,.12); }
+.settings-form input[readonly] { color: #737d97; background: #f8f9fc; cursor: default; }
+.settings-form > small { margin-top: -4px; color: var(--setting-muted); font-size: 12px; }
+.form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 12px; }
+.form-message { min-height: 20px; margin: 0 auto 0 0; color: var(--setting-muted); font-size: 13px; }
+.form-message.is-error { color: #c2414b; }
+.form-message.is-success { color: #27805e; }
+.button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 17px; border: 1px solid transparent; border-radius: 9px; font-weight: 600; transition: background .16s, border-color .16s, color .16s; }
+.button:disabled { opacity: .65; cursor: wait; }
+.button-primary { color: #fff; background: var(--setting-primary); }
+.button-primary:hover:not(:disabled) { background: var(--setting-primary-hover); }
+.button-danger { color: #b1434c; background: #fff; border-color: #f0cfd2; }
+.button-danger:hover:not(:disabled) { background: #fff4f4; border-color: #eab9be; }
+.button svg { width: 17px; height: 17px; }
+.settings-session-card { display: flex; flex-wrap: wrap; align-items: center; }
+.settings-session-card .settings-card-heading { flex: 1 1 420px; margin-bottom: 0; }
+.settings-session-card > .form-message { flex: 1 0 100%; margin-top: 12px; }
+@media (max-width: 768px) {
+    .main-content { width: calc(100% - var(--sidebar-width, 72px)); margin-left: var(--sidebar-width, 72px); padding: 25px 16px 36px; }
+    .settings-card { padding: 20px 17px; }
+    .settings-card-heading { gap: 11px; }
+    .settings-session-card { align-items: flex-start; gap: 17px; }
+    .settings-session-card .settings-card-heading { flex-basis: 100%; }
+    .form-actions { align-items: flex-start; flex-direction: column; gap: 9px; }
+    .form-actions .button { align-self: flex-end; }
+}

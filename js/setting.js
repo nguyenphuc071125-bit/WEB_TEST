@@ -1,0 +1,108 @@
+document.addEventListener("DOMContentLoaded", async () => {
+    const client = window.supabaseClient;
+    if (!client) {
+        showMessage("profileMessage", "Không kết nối được Supabase. Hãy tải lại trang.", "error");
+        return;
+    }
+
+    const profileForm = document.getElementById("profileForm");
+    const passwordForm = document.getElementById("passwordForm");
+    const displayNameInput = document.getElementById("displayName");
+    const emailInput = document.getElementById("accountEmail");
+    const saveProfileButton = document.getElementById("saveProfileButton");
+    const changePasswordButton = document.getElementById("changePasswordButton");
+    const signOutButton = document.getElementById("signOutButton");
+
+    function showMessage(id, message, type = "") {
+        const element = document.getElementById(id);
+        if (!element) return;
+        element.textContent = message;
+        element.classList.toggle("is-error", type === "error");
+        element.classList.toggle("is-success", type === "success");
+    }
+
+    function setBusy(button, busy, busyLabel, defaultLabel) {
+        button.disabled = busy;
+        button.textContent = busy ? busyLabel : defaultLabel;
+    }
+
+    const { data: { user }, error: userError } = await client.auth.getUser();
+    if (userError || !user) {
+        window.location.replace("login.html");
+        return;
+    }
+
+    const metadata = user.user_metadata || {};
+    displayNameInput.value = metadata.full_name || metadata.name || "";
+    emailInput.value = user.email || "";
+
+    profileForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showMessage("profileMessage", "");
+        const fullName = displayNameInput.value.trim();
+        if (!fullName) {
+            showMessage("profileMessage", "Vui lòng nhập tên hiển thị.", "error");
+            displayNameInput.focus();
+            return;
+        }
+
+        setBusy(saveProfileButton, true, "Đang lưu…", "Lưu thay đổi");
+        const { data, error } = await client.auth.updateUser({ data: { full_name: fullName } });
+        setBusy(saveProfileButton, false, "Đang lưu…", "Lưu thay đổi");
+        if (error) {
+            showMessage("profileMessage", `Không lưu được: ${error.message}`, "error");
+            return;
+        }
+
+        const savedName = data.user?.user_metadata?.full_name || fullName;
+        displayNameInput.value = savedName;
+        showMessage("profileMessage", "Đã cập nhật tên hiển thị.", "success");
+        const sidebarName = document.querySelector("#userName");
+        const sidebarAvatar = document.querySelector("#userAvatar");
+        if (sidebarName) sidebarName.textContent = savedName;
+        if (sidebarAvatar) {
+            sidebarAvatar.textContent = savedName.trim().split(/\s+/).slice(-2).map(part => part[0]).join("").toUpperCase();
+        }
+    });
+
+    passwordForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        showMessage("passwordMessage", "");
+        const password = document.getElementById("newPassword").value;
+        const confirmation = document.getElementById("confirmPassword").value;
+        if (password.length < 8) {
+            showMessage("passwordMessage", "Mật khẩu cần có ít nhất 8 ký tự.", "error");
+            return;
+        }
+        if (password !== confirmation) {
+            showMessage("passwordMessage", "Hai mật khẩu chưa khớp.", "error");
+            document.getElementById("confirmPassword").focus();
+            return;
+        }
+
+        setBusy(changePasswordButton, true, "Đang cập nhật…", "Cập nhật mật khẩu");
+        const { error } = await client.auth.updateUser({ password });
+        setBusy(changePasswordButton, false, "Đang cập nhật…", "Cập nhật mật khẩu");
+        if (error) {
+            showMessage("passwordMessage", `Không đổi được mật khẩu: ${error.message}`, "error");
+            return;
+        }
+
+        passwordForm.reset();
+        showMessage("passwordMessage", "Đã cập nhật mật khẩu.", "success");
+    });
+
+    signOutButton.addEventListener("click", async () => {
+        signOutButton.disabled = true;
+        showMessage("sessionMessage", "Đang đăng xuất…");
+        const { error } = await client.auth.signOut();
+        if (error) {
+            signOutButton.disabled = false;
+            showMessage("sessionMessage", `Đăng xuất chưa thành công: ${error.message}`, "error");
+            return;
+        }
+        window.location.replace("login.html");
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+});

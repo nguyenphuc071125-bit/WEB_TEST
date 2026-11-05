@@ -1,0 +1,284 @@
+
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Trang chủ | AECPT</title>
+
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          rel="stylesheet">
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="../styles/sidebar.css">
+    <link rel="stylesheet" href="../styles/dashboard.css">
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+
+    <div class="app-layout">
+
+        <!-- ==========================
+             SIDEBAR
+        =========================== -->
+
+        <div id="sidebar-container"></div>
+
+
+        <!-- ==========================
+             MAIN CONTENT
+        =========================== -->
+
+        <main class="main-content">
+
+            <!-- HEADER -->
+
+            <header class="topbar">
+
+                <div class="topbar-info">
+                    <h1>AI Assistant</h1>
+                    <p>Trợ lý ảo của ban Multimedia</p>
+                </div>
+
+                <div class="assistant-status">
+                    <span class="status-dot"></span>
+                    <span>Đang hoạt động</span>
+                </div>
+
+            </header>
+
+
+            <!-- ==========================
+                 DASHBOARD CONTENT
+            =========================== -->
+
+            <section class="dashboard-content">
+
+                <!-- WELCOME -->
+
+                <div class="welcome-section">
+
+                    <p class="greeting">
+                        Xin chào,
+                        <strong id="greetingName">Hoàng Nam</strong>!
+                        <span>👋</span>
+                    </p>
+
+                    <h2>
+                        Hôm nay mình có thể giúp gì cho bạn?
+                    </h2>
+
+                    <p class="welcome-description">
+                        Bạn có thể hỏi mình về công việc, deadline
+                        hoặc tiến độ của ban Multimedia.
+                    </p>
+
+                </div>
+
+
+                <!-- ==========================
+                     AI CHAT
+                =========================== -->
+
+                <section class="chat-panel">
+
+                    <!-- CHAT MESSAGES -->
+
+                    <div class="chat-messages" id="chatMessages">
+
+                        <!--
+                            Tin nhắn AI và người dùng
+                            được JavaScript render tại đây.
+                        -->
+
+                    </div>
+
+
+                    <!-- ==========================
+                         QUICK ACTIONS
+                    =========================== -->
+
+                    <div class="quick-actions" id="quickActions">
+
+                        <!-- TASK TODAY -->
+
+                        <button
+                            class="quick-card"
+                            type="button"
+                            data-prompt="Hôm nay mình có những công việc nào cần hoàn thành?"
+                        >
+
+                            <span class="quick-icon">
+                                <i data-lucide="circle-check"></i>
+                            </span>
+
+                            <span class="quick-card-text">
+
+                                <strong>
+                                    Công việc hôm nay
+                                </strong>
+
+                                <small>
+                                    Xem các task cần hoàn thành.
+                                </small>
+
+                            </span>
+
+                        </button>
+
+
+                        <!-- UPCOMING DEADLINES -->
+
+                        <button
+                            class="quick-card"
+                            type="button"
+                            data-prompt="Cho mình biết những deadline sắp tới."
+                        >
+
+                            <span class="quick-icon">
+                                <i data-lucide="calendar-days"></i>
+                            </span>
+
+                            <span class="quick-card-text">
+
+                                <strong>
+                                    Deadline sắp tới
+                                </strong>
+
+                                <small>
+                                    Kiểm tra những deadline gần nhất.
+                                </small>
+
+                            </span>
+
+                        </button>
+
+
+                        <!-- TASK PROGRESS -->
+
+                        <button
+                            class="quick-card"
+                            type="button"
+                            data-prompt="Tóm tắt tiến độ công việc của ban Multimedia."
+                        >
+
+                            <span class="quick-icon">
+                                <i data-lucide="chart-no-axes-column-increasing"></i>
+                            </span>
+
+                            <span class="quick-card-text">
+
+                                <strong>
+                                    Tiến độ công việc
+                                </strong>
+
+                                <small>
+                                    Theo dõi tiến độ các nhiệm vụ.
+                                </small>
+
+                            </span>
+
+                        </button>
+
+                    </div>
+
+
+                    <!-- ==========================
+                         CHAT INPUT
+                    =========================== -->
+
+                    <form class="chat-composer" id="chatForm">
+
+                        <!-- ATTACH FILE -->
+
+                        <button
+                            class="attach-button"
+                            type="button"
+                            id="attachButton"
+                            aria-label="Đính kèm tệp"
+                            title="Đính kèm tệp"
+                        >
+
+                            <i data-lucide="paperclip"></i>
+
+                        </button>
+
+
+                        <!-- MESSAGE INPUT -->
+
+                        <input
+                            type="text"
+                            id="messageInput"
+                            placeholder="Nhắn tin cho MultimediaTask AI..."
+                            autocomplete="off"
+                            aria-label="Nhập tin nhắn"
+                        >
+
+
+                        <!-- FILE INPUT -->
+
+                        <input
+                            type="file"
+                            id="fileInput"
+                            hidden
+                        >
+
+
+                        <!-- SEND BUTTON -->
+
+                        <button
+                            class="send-button"
+                            id="sendButton"
+                            type="submit"
+                            aria-label="Gửi tin nhắn"
+                        >
+
+                            <i data-lucide="arrow-up"></i>
+
+                        </button>
+
+                    </form>
+
+
+                    <!-- AI DISCLAIMER -->
+
+                    <p class="ai-disclaimer">
+                        AI có thể đưa ra thông tin chưa chính xác.
+                        Vui lòng kiểm tra lại các thông tin quan trọng.
+                    </p>
+
+                </section>
+
+            </section>
+
+        </main>
+
+    </div>
+
+
+    <!-- ==========================
+         JAVASCRIPT
+    =========================== -->
+
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="../js/sidebar.js"></script>
+
+    <!-- Supabase Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- Supabase Connection -->
+    <script src="../js/supabase.js"></script>
+
+    <script src="../js/dashboard.js"></script>
+
+</body>
+</html>
