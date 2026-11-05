@@ -22,7 +22,53 @@
             </div>
         </header>
 
-        <div class="settings-layout">
+    <div class="settings-layout">
+      <section class="settings-card notification-settings-card" aria-labelledby="notification-settings-title">
+        <div class="notification-settings-heading">
+          <div>
+            <h2 id="notification-settings-title">Cài đặt thông báo</h2>
+            <p>Tùy chỉnh thông báo và nhắc hạn cho tài khoản của bạn.</p>
+          </div>
+          <button class="settings-icon-button" id="resetNotificationSettings" type="button" aria-label="Hủy thay đổi" title="Hủy thay đổi">×</button>
+        </div>
+
+        <div class="notification-account" id="notificationAccount">
+          <span class="notification-account-avatar" id="notificationAccountAvatar">?</span>
+          <span><strong id="notificationAccountName">Đang tải tài khoản…</strong><small id="notificationAccountRole">Thành viên Multimedia</small></span>
+        </div>
+
+        <h3 class="notification-section-title">Thông báo</h3>
+        <div class="notification-option">
+          <span><strong>Công việc mới</strong><small>Khi bạn được giao công việc.</small></span>
+          <label class="setting-switch"><input id="notifyNewTasks" type="checkbox" checked><span class="setting-switch-track"></span><span class="setting-switch-state">Bật</span></label>
+        </div>
+        <div class="notification-option">
+          <span><strong>Nhắc deadline</strong><small>Nhận nhắc nhở trước khi công việc đến hạn.</small></span>
+          <label class="setting-switch"><input id="notifyDeadlines" type="checkbox" checked><span class="setting-switch-track"></span><span class="setting-switch-state">Bật</span></label>
+        </div>
+        <div class="reminder-options" id="reminderOptions">
+          <label class="reminder-field"><span>Nhắc trước</span><select id="reminderLeadHours"><option value="1">1 giờ</option><option value="3">3 giờ</option><option value="6">6 giờ</option><option value="12">12 giờ</option><option value="24" selected>24 giờ</option><option value="48">48 giờ</option></select></label>
+          <label class="reminder-field"><span>Giờ nhận nhắc nhở</span><input id="reminderTime" type="time" value="08:00"></label>
+          <small>Giờ Việt Nam (GMT+7)</small>
+          <p id="reminderPreview">Mỗi ngày lúc 08:00, nhắc công việc đến hạn trong 24 giờ tới.</p>
+        </div>
+        <div class="notification-option notification-option-last">
+          <span><strong>Công việc quá hạn</strong><small>Nhắc các công việc chưa hoàn thành đã trễ deadline.</small></span>
+          <label class="setting-switch"><input id="notifyOverdue" type="checkbox" checked><span class="setting-switch-track"></span><span class="setting-switch-state">Bật</span></label>
+        </div>
+
+        <div class="notification-language-row">
+          <label for="settingsLanguage"><strong>Ngôn ngữ</strong></label>
+          <select id="settingsLanguage"><option value="vi">Tiếng Việt</option><option value="en">English</option></select>
+        </div>
+        <p class="notification-footnote">Các tùy chọn này chỉ áp dụng cho tài khoản của bạn.</p>
+        <p class="notification-save-status" id="notificationSaveStatus" role="status" aria-live="polite"></p>
+        <div class="notification-actions">
+          <button class="settings-button-secondary" id="cancelNotificationSettings" type="button">Hủy</button>
+          <button class="settings-button-primary" id="saveNotificationSettings" type="button">Lưu thay đổi</button>
+        </div>
+      </section>
+
             <section class="settings-card" aria-labelledby="profileHeading">
                 <div class="settings-card-heading">
                     <span class="settings-icon"><i data-lucide="user-round"></i></span>
