@@ -95,7 +95,7 @@ loginForm.addEventListener("submit", async function (event) {
     return;
   }
 
-  window.location.href = "task-list.html";
+  window.location.href = "dashboard.html";
 });
 
 
