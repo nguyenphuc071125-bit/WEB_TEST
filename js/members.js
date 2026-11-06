@@ -118,25 +118,38 @@ async function loadMembers() {
     showLoading();
 
     try {
-        const { data, error } = await window.supabaseClient
-            .from("members")
-            .select(`
-                member_id,
-                member_label,
-                n_roles_in_roster,
-                n_tasks_assigned,
-                member_roles (
-                    role,
-                    in_roster,
-                    n_tasks_assigned
-                )
-            `);
+        const [membersResult, availabilityResult] = await Promise.all([
+            window.supabaseClient
+                .from("members")
+                .select(`
+                    member_id,
+                    member_label,
+                    n_roles_in_roster,
+                    n_tasks_assigned,
+                    member_roles (
+                        role,
+                        in_roster,
+                        n_tasks_assigned
+                    )
+                `),
+            window.supabaseClient
+                .from("member_availability")
+                .select("availability_id, member_id, weekday, start_time, end_time")
+                .order("weekday")
+                .order("start_time")
+        ]);
 
-        if (error) {
-            throw error;
-        }
+        if (membersResult.error) throw membersResult.error;
+        if (availabilityResult.error) throw availabilityResult.error;
 
-        members = (data || []).map(member => {
+        const availabilityByMember = new Map();
+        (availabilityResult.data || []).forEach(row => {
+            const memberAvailability = availabilityByMember.get(String(row.member_id)) || [];
+            memberAvailability.push(row);
+            availabilityByMember.set(String(row.member_id), memberAvailability);
+        });
+
+        members = (membersResult.data || []).map(member => {
             const roles = Array.isArray(member.member_roles)
                 ? member.member_roles
                 : [];
@@ -155,7 +168,8 @@ async function loadMembers() {
                     ? "active"
                     : "inactive",
                 assignedTasks: Number(member.n_tasks_assigned) || 0,
-                member_roles: roles
+                member_roles: roles,
+                availability: availabilityByMember.get(String(member.member_id)) || []
             };
         });
 
@@ -499,7 +513,6 @@ async function openMemberDetail(memberId) {
 /* RENDER DETAIL */
 
 function renderMemberDetail(member) {
-
     if (!DOM.detailContent) return;
 
     const tasks = Array.isArray(member.tasks)
@@ -516,6 +529,7 @@ function renderMemberDetail(member) {
     const activeTasks = tasks.filter(task =>
         task.status !== "completed"
     );
+    const availability = renderAvailabilitySummary(member.availability || []);
 
     DOM.detailContent.innerHTML = `
 
@@ -636,6 +650,11 @@ function renderMemberDetail(member) {
 
         </div>
 
+        <div class="detail-section">
+            <h4>Thời gian rảnh</h4>
+            ${availability}
+        </div>
+
 
         <button
             type="button"
@@ -724,6 +743,7 @@ function openUpdateMemberModal(memberId) {
     // Điền thông tin vào form dựa trên name của input.
     fillForm(DOM.updateForm, member);
     initializeAvailability(member.availability || {});
+    showAvailabilityMessage("");
 
     refreshIcons();
 
@@ -772,21 +792,27 @@ const AVAILABILITY_DAY_NAMES = {
     "6": "Thứ 6", "7": "Thứ 7", "8": "Chủ nhật"
 };
 
+const UI_DAY_TO_DB_WEEKDAY = {
+    "2": 1, "3": 2, "4": 3, "5": 4, "6": 5, "7": 6, "8": 0
+};
+
+const DB_WEEKDAY_TO_UI_DAY = {
+    0: "8", 1: "2", 2: "3", 3: "4", 4: "5", 5: "6", 6: "7"
+};
+
 function initializeAvailability(value = {}) {
     availabilityByDay = {};
     activeAvailabilityDay = null;
 
-    if (typeof value === "string") {
-        try { value = JSON.parse(value); } catch (_) { value = {}; }
-    }
-
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-        Object.entries(value).forEach(([day, hours]) => {
-            const validDay = Object.hasOwn(AVAILABILITY_DAY_NAMES, String(day));
-            if (!validDay || !Array.isArray(hours)) return;
-            availabilityByDay[day] = [...new Set(hours.map(Number))]
-                .filter(hour => Number.isInteger(hour) && hour >= 6 && hour < 22)
-                .sort((a, b) => a - b);
+    if (Array.isArray(value)) {
+        value.forEach(row => {
+            const day = DB_WEEKDAY_TO_UI_DAY[Number(row.weekday)];
+            if (!day) return;
+            if (!availabilityByDay[day]) availabilityByDay[day] = [];
+            availabilityByDay[day].push({
+                startTime: String(row.start_time).slice(0, 5),
+                endTime: String(row.end_time).slice(0, 5)
+            });
         });
     }
 
@@ -794,17 +820,23 @@ function initializeAvailability(value = {}) {
     renderAvailabilitySlots();
 }
 
-function selectedHourRanges(hours = []) {
-    const sorted = [...hours].sort((a, b) => a - b);
-    const ranges = [];
-    sorted.forEach(hour => {
-        const last = ranges[ranges.length - 1];
-        if (last && hour === last.end) last.end++;
-        else ranges.push({ start: hour, end: hour + 1 });
+function renderAvailabilitySummary(rows) {
+    const byDay = new Map();
+    rows.forEach(row => {
+        const name = AVAILABILITY_DAY_NAMES[DB_WEEKDAY_TO_UI_DAY[Number(row.weekday)]];
+        if (!name) return;
+        const ranges = byDay.get(name) || [];
+        ranges.push(`${String(row.start_time).slice(0, 5)}–${String(row.end_time).slice(0, 5)}`);
+        byDay.set(name, ranges);
     });
-    return ranges.map(({ start, end }) =>
-        `${String(start).padStart(2, "0")}:00–${String(end).padStart(2, "0")}:00`
-    );
+
+    if (!byDay.size) {
+        return '<p class="field-description">Chưa có lịch rảnh.</p>';
+    }
+
+    return `<ul class="availability-summary">${[...byDay.entries()]
+        .map(([day, ranges]) => `<li><strong>${day}</strong><span>${ranges.map(escapeHTML).join(", ")}</span></li>`)
+        .join("")}</ul>`;
 }
 
 function renderAvailabilitySlots() {
@@ -833,36 +865,43 @@ function renderAvailabilitySlots() {
     }
 
     container.innerHTML = selectedDays.map(day => {
-        const chosen = availabilityByDay[day] || [];
-        const ranges = selectedHourRanges(chosen);
+        const ranges = availabilityByDay[day] || [];
         return `
             <section class="availability-day-row">
                 <div class="availability-day-heading">
                     <strong>${AVAILABILITY_DAY_NAMES[day]}</strong>
-                    <span>${ranges.length ? ranges.join(", ") : "Chưa chọn giờ"}</span>
+                    <span>${ranges.length ? `${ranges.length} khung giờ` : "Chưa chọn giờ"}</span>
                 </div>
-                <div class="availability-hour-grid" role="group" aria-label="Khung giờ rảnh ${AVAILABILITY_DAY_NAMES[day]}">
-                    ${Array.from({ length: 16 }, (_, index) => {
-                        const hour = index + 6;
-                        const active = chosen.includes(hour);
-                        return `
-                            <button type="button" class="availability-hour ${active ? "is-selected" : ""}"
-                                    data-availability-day="${day}" data-availability-hour="${hour}"
-                                    aria-pressed="${active}" aria-label="${String(hour).padStart(2, "0")}:00 đến ${String(hour + 1).padStart(2, "0")}:00">
-                                <span>${String(hour).padStart(2, "0")}:00</span>
-                                <small>${String(hour + 1).padStart(2, "0")}:00</small>
-                            </button>
-                        `;
-                    }).join("")}
+                <div class="availability-time-list">
+                    ${ranges.map((range, index) => `
+                        <div class="availability-time-row">
+                            <label>
+                                <span>Bắt đầu</span>
+                                <input type="time" value="${escapeHTML(range.startTime)}"
+                                       data-availability-field="startTime" data-day="${day}" data-index="${index}">
+                            </label>
+                            <label>
+                                <span>Kết thúc</span>
+                                <input type="time" value="${escapeHTML(range.endTime)}"
+                                       data-availability-field="endTime" data-day="${day}" data-index="${index}">
+                            </label>
+                            <button type="button" class="availability-remove-btn"
+                                    data-remove-availability="${day}" data-index="${index}"
+                                    aria-label="Xóa khung giờ ${index + 1} ${AVAILABILITY_DAY_NAMES[day]}">Xóa</button>
+                        </div>
+                    `).join("")}
                 </div>
+                <button type="button" class="availability-add-btn" data-add-availability="${day}">
+                    + Thêm khung giờ
+                </button>
             </section>
         `;
-    }).join("") + '<small class="availability-help">Bấm từng ô để bật/tắt khung giờ 1 tiếng.</small>';
+    }).join("");
 }
 
 document.addEventListener("click", event => {
     const dayButton = event.target.closest("[data-availability-day]");
-    if (dayButton && !dayButton.hasAttribute("data-availability-hour")) {
+    if (dayButton) {
         activeAvailabilityDay = dayButton.dataset.availabilityDay;
         if (Object.hasOwn(availabilityByDay, activeAvailabilityDay)) {
             delete availabilityByDay[activeAvailabilityDay];
@@ -873,17 +912,118 @@ document.addEventListener("click", event => {
         return;
     }
 
-    const slot = event.target.closest("[data-availability-hour]");
-    if (!slot) return;
+    const addButton = event.target.closest("[data-add-availability]");
+    if (addButton) {
+        const day = addButton.dataset.addAvailability;
+        availabilityByDay[day].push({ startTime: "09:00", endTime: "10:00" });
+        renderAvailabilitySlots();
+        return;
+    }
 
-    const day = slot.dataset.availabilityDay;
-    const hour = Number(slot.dataset.availabilityHour);
-    const selected = new Set(availabilityByDay[day] || []);
-    if (selected.has(hour)) selected.delete(hour);
-    else selected.add(hour);
-    availabilityByDay[day] = [...selected].sort((a, b) => a - b);
-    renderAvailabilitySlots();
+    const removeButton = event.target.closest("[data-remove-availability]");
+    if (removeButton) {
+        const day = removeButton.dataset.removeAvailability;
+        availabilityByDay[day].splice(Number(removeButton.dataset.index), 1);
+        renderAvailabilitySlots();
+    }
 });
+
+document.addEventListener("input", event => {
+    const field = event.target.closest("[data-availability-field]");
+    if (!field) return;
+
+    const day = field.dataset.day;
+    const index = Number(field.dataset.index);
+    const range = availabilityByDay[day]?.[index];
+    if (range) range[field.dataset.availabilityField] = field.value;
+
+    const hidden = document.getElementById("availabilityValue");
+    if (hidden) hidden.value = JSON.stringify(availabilityByDay);
+});
+
+async function saveMemberAvailability() {
+    const button = document.getElementById("saveAvailabilityButton");
+    if (!currentMemberId || !button) return;
+
+    const rows = [];
+    for (const [day, ranges] of Object.entries(availabilityByDay)) {
+        const sortedRanges = [...ranges].sort((a, b) => a.startTime.localeCompare(b.startTime));
+        for (let index = 0; index < sortedRanges.length; index++) {
+            const range = sortedRanges[index];
+            if (!range.startTime || !range.endTime || range.endTime <= range.startTime) {
+                showAvailabilityMessage("Mỗi khung giờ cần có giờ kết thúc sau giờ bắt đầu.", "error");
+                return;
+            }
+            if (index > 0 && range.startTime < sortedRanges[index - 1].endTime) {
+                showAvailabilityMessage(`${AVAILABILITY_DAY_NAMES[day]} có các khung giờ bị chồng lấn.`, "error");
+                return;
+            }
+            rows.push({
+                member_id: currentMemberId,
+                weekday: UI_DAY_TO_DB_WEEKDAY[day],
+                start_time: range.startTime,
+                end_time: range.endTime
+            });
+        }
+    }
+
+    const member = members.find(item => String(item.id) === String(currentMemberId));
+    if (!member) {
+        showAvailabilityMessage("Không tìm thấy thành viên cần cập nhật.", "error");
+        return;
+    }
+    const previousRows = member.availability || [];
+    button.disabled = true;
+    button.textContent = "Đang lưu…";
+    showAvailabilityMessage("");
+
+    try {
+        const { error: deleteError } = await window.supabaseClient
+            .from("member_availability")
+            .delete()
+            .eq("member_id", currentMemberId);
+        if (deleteError) throw deleteError;
+
+        if (rows.length) {
+            const { error: insertError } = await window.supabaseClient
+                .from("member_availability")
+                .insert(rows);
+            if (insertError) {
+                if (previousRows.length) {
+                    const { error: restoreError } = await window.supabaseClient
+                        .from("member_availability")
+                        .insert(previousRows.map(({ member_id, weekday, start_time, end_time }) => ({
+                            member_id, weekday, start_time, end_time
+                        })));
+                    if (restoreError) {
+                        throw new Error(`Lưu lịch thất bại (${insertError.message}); khôi phục lịch cũ cũng thất bại (${restoreError.message}).`);
+                    }
+                }
+                throw insertError;
+            }
+        }
+
+        member.availability = rows;
+        showAvailabilityMessage("Đã lưu thời gian rảnh.", "success");
+        renderMemberDetail(member);
+    } catch (error) {
+        console.error("Không thể lưu thời gian rảnh:", error);
+        showAvailabilityMessage(`Không lưu được thời gian rảnh: ${error.message}`, "error");
+    } finally {
+        button.disabled = false;
+        button.textContent = "Lưu thời gian rảnh";
+    }
+}
+
+function showAvailabilityMessage(text, type = "") {
+    const message = document.getElementById("availabilityMessage");
+    if (!message) return;
+    message.textContent = text;
+    message.classList.toggle("is-error", type === "error");
+    message.classList.toggle("is-success", type === "success");
+}
+
+document.getElementById("saveAvailabilityButton")?.addEventListener("click", saveMemberAvailability);
 
 
 // Mở/đóng danh sách nhóm và cập nhật thẻ khi checkbox thay đổi.

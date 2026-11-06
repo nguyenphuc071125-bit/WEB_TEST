@@ -1336,39 +1336,91 @@ button {
 
 .availability-day-heading strong { color: var(--text-primary); font-size: 12px; }
 
-.availability-hour-grid {
-    display: grid;
-    grid-template-columns: repeat(16, minmax(42px, 1fr));
-    gap: 4px;
-    overflow-x: auto;
-    padding-bottom: 4px;
+.availability-time-row {
+    display: flex;
+    align-items: end;
+    gap: 8px;
+    margin-bottom: 8px;
 }
 
-.availability-hour {
-    min-height: 48px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1px;
+.availability-time-row label {
+    display: grid;
+    flex: 1;
+    gap: 4px;
+    color: var(--text-secondary);
+    font-size: 10px;
+}
+
+.availability-time-row input {
+    min-width: 0;
+    height: 34px;
+    padding: 0 8px;
     border: 1px solid var(--border);
-    border-radius: 7px;
+    border-radius: 6px;
+    background: var(--white);
+    color: var(--text-primary);
+}
+
+.availability-remove-btn,
+.availability-add-btn {
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
     background: var(--white);
     color: var(--text-secondary);
     cursor: pointer;
-    transition: 0.15s ease;
+    font-size: 10px;
 }
 
-.availability-hour small { color: var(--text-muted); font-size: 8px; }
-
-.availability-hour:hover,
-.availability-hour.is-selected {
-    border-color: var(--primary);
-    background: var(--primary-light);
+.availability-add-btn {
     color: var(--primary-dark);
+    border-color: #C9D0FF;
 }
 
-.availability-help { display: block; margin-top: 8px; }
+.availability-remove-btn:hover,
+.availability-add-btn:hover {
+    background: var(--primary-light);
+}
+
+.availability-save-btn {
+    margin-top: 10px;
+}
+
+.availability-message {
+    min-height: 15px;
+    margin: 8px 0 0;
+    font-size: 10px;
+}
+
+.availability-message.is-error {
+    color: #B42318;
+}
+
+.availability-message.is-success {
+    color: #067647;
+}
+
+.availability-summary {
+    display: grid;
+    gap: 8px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+.availability-summary li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.availability-summary strong {
+    flex-shrink: 0;
+    color: var(--text-primary);
+}
 
 /* =====================================================
    13. MODAL ACTIONS

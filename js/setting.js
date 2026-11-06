@@ -32,8 +32,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         return;
     }
 
+    const appUser = window.loadAppUser
+        ? await window.loadAppUser()
+        : null;
     const metadata = user.user_metadata || {};
-    displayNameInput.value = metadata.full_name || metadata.name || "";
+    displayNameInput.value = metadata.full_name || metadata.name || appUser?.name || "";
     emailInput.value = user.email || "";
 
     profileForm.addEventListener("submit", async (event) => {
@@ -57,11 +60,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         const savedName = data.user?.user_metadata?.full_name || fullName;
         displayNameInput.value = savedName;
         showMessage("profileMessage", "Đã cập nhật tên hiển thị.", "success");
-        const sidebarName = document.querySelector("#userName");
-        const sidebarAvatar = document.querySelector("#userAvatar");
-        if (sidebarName) sidebarName.textContent = savedName;
-        if (sidebarAvatar) {
-            sidebarAvatar.textContent = savedName.trim().split(/\s+/).slice(-2).map(part => part[0]).join("").toUpperCase();
+        if (window.appUser) {
+            window.appUser = { ...window.appUser, name: savedName };
+            window.renderAppUser?.(window.appUser);
         }
     });
 

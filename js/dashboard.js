@@ -13,7 +13,6 @@ const API_CONFIG = {
     BASE_URL: "http://localhost:3000/api",
 
     ENDPOINTS: {
-        currentUser: "/auth/me",
         dashboard: "/dashboard",
         sendMessage: "/assistant/chat",
         conversations: "/assistant/conversations",
@@ -96,17 +95,6 @@ const API = {
     },
 
 
-    // Lấy thông tin người dùng đang đăng nhập
-
-    async getCurrentUser() {
-
-        return this.request(
-            API_CONFIG.ENDPOINTS.currentUser
-        );
-
-    },
-
-
     // Lấy dữ liệu tổng quan dashboard
 
     async getDashboard() {
@@ -167,61 +155,7 @@ const API = {
 
 
 /* =========================================
-   5. LOAD SIDEBAR
-========================================= */
-
-async function loadSidebar() {
-
-    const container = document.getElementById("sidebar-container");
-
-    if (!container) {
-        console.error("Không tìm thấy #sidebar-container");
-        return;
-    }
-
-    try {
-        const url = new URL(
-            "../components/sidebar.html",
-            window.location.href
-        );
-
-        console.log("Đang tải sidebar:", url.href);
-
-        const response = await fetch(url);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const html = await response.text();
-
-        container.innerHTML = html;
-
-        console.log("Đã tải sidebar thành công!");
-
-        // Đánh dấu trang hiện tại
-        const currentPage = window.location.pathname
-            .split("/")
-            .pop()
-            .replace(".html", "");
-
-        document.querySelectorAll(".menu-item").forEach(item => {
-            item.classList.toggle(
-                "active",
-                item.dataset.page === currentPage
-            );
-        });
-
-        // Khởi tạo icon sau khi tải HTML
-        initializeIcons();
-
-    } catch (error) {
-        console.error("Lỗi tải sidebar:", error);
-    }
-}
-
-/* =========================================
-   6. LUCIDE ICONS
+   5. LUCIDE ICONS
 ========================================= */
 
 function initializeIcons() {
@@ -235,67 +169,18 @@ function initializeIcons() {
 }
 
 /* =========================================
-   7. LOAD USER INFORMATION
+   6. LOAD USER INFORMATION
 ========================================= */
 
 async function loadUserInfo() {
-
     try {
-
-        const user = await API.getCurrentUser();
-
+        const user = await window.loadAppUser();
+        if (!user) return;
         state.currentUser = user;
-
-        renderUserInfo(user);
-
+        if (DOM.greetingName) DOM.greetingName.textContent = user.name;
     } catch (error) {
-
-        console.error(
-            "Không thể tải thông tin người dùng:",
-            error
-        );
-
+        console.error("Không thể tải thông tin người dùng:", error);
     }
-
-}
-
-
-function renderUserInfo(user) {
-
-    if (!user) return;
-
-    const userName =
-        document.getElementById("userName");
-
-    const userRole =
-        document.getElementById("userRole");
-
-    const userAvatar =
-        document.getElementById("userAvatar");
-
-
-    if (DOM.greetingName) {
-        DOM.greetingName.textContent = user.name;
-    }
-
-    if (userName) {
-        userName.textContent = user.name;
-    }
-
-    if (userRole) {
-        userRole.textContent = user.role;
-    }
-
-    if (userAvatar) {
-
-        const words = user.name.trim().split(/\s+/);
-
-        userAvatar.textContent = words.length > 1
-            ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
-            : words[0].slice(0, 2).toUpperCase();
-
-    }
-
 }
 
 
@@ -800,10 +685,7 @@ async function loadDashboardData() {
 
 async function initializeDashboard() {
 
-    // Tải sidebar
-    await loadSidebar();
-
-    // Lấy thông tin người dùng từ Backend
+    // Sidebar component is loaded by sidebar.js.
     await loadUserInfo();
 
     // Lấy lịch sử trò chuyện từ Backend
