@@ -148,10 +148,22 @@ async function loadMyTasks() {
             if (error) throw error;
 
             const user = data.session?.user;
-            state.memberId = user?.user_metadata?.member_id ||
-                user?.app_metadata?.member_id ||
-                user?.id ||
-                null;
+            if (!user) {
+                state.memberId = null;
+            } else {
+                const { data: membership, error: membershipError } = await state.db
+                    .from("team_members")
+                    .select("member_id")
+                    .eq("user_id", user.id)
+                    .maybeSingle();
+
+                if (membershipError) throw membershipError;
+
+                state.memberId = membership?.member_id ||
+                    user.user_metadata?.member_id ||
+                    user.app_metadata?.member_id ||
+                    null;
+            }
         }
 
         if (!state.memberId) {
@@ -159,7 +171,7 @@ async function loadMyTasks() {
             updateStatistics(null);
             applyFilters();
             updateOverallProgress(null);
-            showTaskLoadError("Đăng nhập để xem các công việc được giao cho bạn.");
+            showTaskLoadError("Tài khoản chưa được liên kết với thành viên. Hãy thêm liên kết trong bảng team_members.");
             return;
         }
 
@@ -197,12 +209,12 @@ async function loadMyTasks() {
                 package_deadline_at, posted_on_main_page, post_method,
                 is_cancelled, post_done, data_quality_flag
             `)
-            .in("task_id", taskIds)
-            .neq("is_cancelled", true);
+            .in("task_id", taskIds);
 
         if (tasksError) throw tasksError;
 
         state.tasks = (tasks || [])
+            .filter(task => task.is_cancelled !== true)
             .filter(task => assignmentsByTask.has(task.task_id))
             .map(task => normalizeTask(
                 task,

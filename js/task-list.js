@@ -111,7 +111,7 @@
   }
 
   function taskStatus(task) {
-    const list = task.assignments || [];
+    const list = (task.assignments || []).filter(a => a.member_id);
     if (!list.length) return "not_started";
     if (list.every(a => assignmentStatus(a) === "completed")) return "completed";
     if (list.some(a => assignmentStatus(a) === "in_progress")) return "in_progress";
