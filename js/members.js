@@ -124,6 +124,8 @@ async function loadMembers() {
                 .select(`
                     member_id,
                     member_label,
+                    email,
+                    is_active,
                     n_roles_in_roster,
                     n_tasks_assigned,
                     member_roles (
@@ -164,7 +166,7 @@ async function loadMembers() {
                 groups,
                 group: groups.join(", "),
                 role: groups.join(", ") || "Thành viên",
-                status: Number(member.n_roles_in_roster) > 0
+                status: member.is_active
                     ? "active"
                     : "inactive",
                 assignedTasks: Number(member.n_tasks_assigned) || 0,

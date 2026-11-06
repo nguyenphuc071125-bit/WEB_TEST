@@ -81,10 +81,14 @@
         detailStatus: $("#calendarDetailStatus"),
         detailDescription: $("#calendarDetailDescription"),
         detailGroup: $("#calendarDetailGroup"),
-        detailAssigner: $("#calendarDetailAssigner"),
+        detailTaskId: $("#calendarDetailTaskId"),
+        detailEvent: $("#calendarDetailEvent"),
+        detailType: $("#calendarDetailType"),
+        detailPriority: $("#calendarDetailPriority"),
         detailAssignees: $("#calendarDetailAssignees"),
         detailStart: $("#calendarDetailStartDate"),
         detailDeadline: $("#calendarDetailDeadline"),
+        detailOnAir: $("#calendarDetailOnAir"),
         detailDuration: $("#calendarDetailDuration"),
         detailProgress: $("#calendarDetailProgress"),
         detailProgressBar: $("#calendarDetailProgressBar"),
@@ -228,6 +232,10 @@
         return null;
     }
 
+    function getTaskStart(task) {
+        return task.start_date ? parseDate(task.start_date) : null;
+    }
+
     function getAssignments(taskId) {
         return state.assignments.filter(
             item => item.task_id === taskId
@@ -235,9 +243,20 @@
     }
 
     function getStatus(task) {
-        const rows = getAssignments(task.task_id);
+        const rows = getAssignments(task.task_id)
+            .filter(row => row.member_id);
 
-        if (!rows.length) return "not_started";
+        if (!rows.length) {
+            const storedStatus = String(task.status || "").toLowerCase();
+            return [
+                "not_started",
+                "in_progress",
+                "pending_review",
+                "completed"
+            ].includes(storedStatus)
+                ? storedStatus
+                : "not_started";
+        }
 
         if (rows.every(row =>
             row.is_done === true ||
@@ -289,8 +308,22 @@
         return ids.length ? ids.join(", ") : "Chưa phân công";
     }
 
+    function getTaskEvent(task) {
+        return Array.isArray(task.events) ? task.events[0] : task.events;
+    }
+
+    function priorityLabel(priority) {
+        return {
+            low: "Thấp",
+            medium: "Trung bình",
+            high: "Cao"
+        }[String(priority || "").toLowerCase()] || "Chưa đặt";
+    }
+
     function getTaskRows() {
-        let rows = state.tasks.filter(task => !task.is_cancelled);
+        let rows = state.tasks.filter(task =>
+            !task.is_cancelled && task.status !== "cancelled"
+        );
 
         if (state.myTasksOnly && state.currentMemberId) {
             rows = rows.filter(task =>
@@ -741,8 +774,7 @@
             return;
         }
 
-        // Schema hiện tại không có ngày bắt đầu thực hiện.
-        // Gantt chỉ hiển thị mốc deadline, không tự suy diễn thời lượng.
+        // Gantt displays the deadline marker and the stored start date.
         const monthStart = new Date(year, month, 1);
         const daysInMonth = new Date(year, month + 1, 0).getDate();
 
@@ -776,6 +808,7 @@
         ).join("");
 
         const rows = visibleItems.map(({ task, deadline }) => {
+            const start = getTaskStart(task);
 
             let columnIndex;
 
@@ -810,7 +843,7 @@
                             ${escapeHTML(task.task_title || "Công việc chưa có tên")}
 
                             <span class="gantt-task-subtitle">
-                                ${escapeHTML(statusLabel(status))}
+                                ${escapeHTML(statusLabel(status))} · ${Math.max(0, Math.min(100, Number(task.progress) || 0))}%
                             </span>
 
                         </div>
@@ -819,7 +852,9 @@
                             ${escapeHTML(getTaskRoles(task))}
                         </span>
 
-                        <span class="gantt-task-date">—</span>
+                        <span class="gantt-task-date">
+                            ${start ? formatDate(start, { day: "2-digit", month: "2-digit" }) : "—"}
+                        </span>
 
                         <span class="gantt-task-date">
                             ${formatDate(deadline, { day: "2-digit", month: "2-digit" })}
@@ -890,7 +925,7 @@
 
         if (elements.ganttRange) {
             elements.ganttRange.textContent =
-                `${visibleItems.length} deadline trong ${formatMonth(state.currentDate)} · Chưa có dữ liệu ngày bắt đầu và % tiến độ`;
+                `${visibleItems.length} deadline trong ${formatMonth(state.currentDate)} · Hiển thị ngày bắt đầu và tiến độ từ database`;
         }
 
         refreshIcons();
@@ -956,7 +991,10 @@
         state.selectedTaskId = task.task_id;
 
         const assignments = getAssignments(task.task_id);
+        const event = getTaskEvent(task);
+        const start = getTaskStart(task);
         const deadline = getTaskDeadline(task);
+        const onAir = getTaskOnAir(task);
         const status = getStatus(task);
 
         if (elements.detailTitle) {
@@ -985,9 +1023,22 @@
             elements.detailGroup.textContent = getTaskRoles(task);
         }
 
-        if (elements.detailAssigner) {
-            elements.detailAssigner.textContent =
-                "Chưa có dữ liệu trong Supabase";
+        if (elements.detailTaskId) {
+            elements.detailTaskId.textContent = task.task_id || "—";
+        }
+
+        if (elements.detailEvent) {
+            elements.detailEvent.textContent = event
+                ? [event.event_label, event.event_category].filter(Boolean).join(" · ") || task.event_id
+                : task.event_id || "Chưa gắn sự kiện";
+        }
+
+        if (elements.detailType) {
+            elements.detailType.textContent = task.task_type || "Chưa phân loại";
+        }
+
+        if (elements.detailPriority) {
+            elements.detailPriority.textContent = priorityLabel(task.priority);
         }
 
         if (elements.detailAssignees) {
@@ -995,9 +1046,10 @@
                 getTaskMemberIds(task);
         }
 
-        // Schema hiện tại không có cột ngày bắt đầu.
         if (elements.detailStart) {
-            elements.detailStart.textContent = "Chưa có dữ liệu";
+            elements.detailStart.textContent = start
+                ? formatDate(start)
+                : "Chưa đặt ngày bắt đầu";
         }
 
         if (elements.detailDeadline) {
@@ -1008,36 +1060,33 @@
                 : "Chưa có deadline";
         }
 
-        if (elements.detailDuration) {
-            elements.detailDuration.textContent =
-                "Chưa có dữ liệu ngày bắt đầu";
+        if (elements.detailOnAir) {
+            elements.detailOnAir.textContent = onAir
+                ? `${formatDate(onAir)}${task.on_air_time
+                    ? ` · ${formatTime(task.on_air_time)}`
+                    : ""}`
+                : "Chưa đặt lịch lên sóng";
         }
 
-        // Chỉ thống kê phân công hoàn thành, không giả lập % tiến độ.
-        const completedAssignments = assignments.filter(row =>
-            row.is_done === true ||
-            String(row.assignment_state || "").toLowerCase() === "completed"
-        ).length;
+        if (elements.detailDuration) {
+            elements.detailDuration.textContent = start && deadline
+                ? `${Math.max(1, Math.ceil((startOfDay(deadline) - startOfDay(start)) / 86400000) + 1)} ngày`
+                : "Chưa đủ dữ liệu";
+        }
 
-        const progressText = assignments.length
-            ? `${completedAssignments}/${assignments.length} phân công hoàn thành`
-            : "Chưa có phân công";
+        const progress = Math.max(0, Math.min(100, Number(task.progress) || 0));
 
         if (elements.detailProgress) {
-            elements.detailProgress.textContent = progressText;
+            elements.detailProgress.textContent = `${progress}%`;
         }
 
         if (elements.detailProgressBar) {
-            const width = assignments.length
-                ? (completedAssignments / assignments.length) * 100
-                : 0;
-
-            elements.detailProgressBar.style.width = `${width}%`;
+            elements.detailProgressBar.style.width = `${progress}%`;
         }
 
         if (elements.detailNote) {
             elements.detailNote.textContent =
-                "Schema hiện tại chưa có trường ghi chú cá nhân.";
+                event?.category_note || "Sự kiện chưa có ghi chú.";
         }
 
         elements.detailOverlay.hidden = false;
@@ -1155,9 +1204,8 @@
         elements.personalBtn?.addEventListener("click", () => {
             if (!state.currentMemberId) {
                 alert(
-                    "Chưa xác định được member_id của tài khoản. " +
-                    "Hãy cấu hình TASK_CALENDAR_CONFIG.memberId " +
-                    "hoặc lưu member_id trong Supabase Auth metadata."
+                    "Tài khoản chưa được liên kết với thành viên. " +
+                    "Hãy kiểm tra bảng team_members và quyền SELECT của RLS."
                 );
                 return;
             }
@@ -1286,10 +1334,18 @@
 
             state.currentUserId = user.id;
 
-            state.currentMemberId =
+            const { data: membership, error: membershipError } = await client
+                .from("team_members")
+                .select("member_id")
+                .eq("user_id", user.id)
+                .maybeSingle();
+
+            if (membershipError) throw membershipError;
+
+            state.currentMemberId = membership?.member_id ||
                 user.user_metadata?.member_id ||
                 user.app_metadata?.member_id ||
-                user.id;
+                null;
 
         } catch (error) {
             console.warn(
@@ -1378,7 +1434,16 @@
                         post_method,
                         is_cancelled,
                         post_done,
-                        data_quality_flag
+                        data_quality_flag,
+                        status,
+                        start_date,
+                        priority,
+                        progress,
+                        events (
+                            event_label,
+                            event_category,
+                            category_note
+                        )
                     `)
                     .order(
                         "package_deadline_date",
