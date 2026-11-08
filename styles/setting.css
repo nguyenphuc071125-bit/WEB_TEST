@@ -152,6 +152,38 @@ button {
     transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
+.password-input-wrap {
+    position: relative;
+}
+
+.settings-form .password-input-wrap input {
+    padding-right: 58px;
+}
+
+.password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    min-height: 30px;
+    padding: 0 4px;
+    transform: translateY(-50%);
+    color: var(--setting-primary-dark);
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.password-toggle:hover {
+    color: var(--setting-primary);
+}
+
+.password-toggle:focus-visible {
+    outline: 2px solid var(--setting-primary);
+    outline-offset: 2px;
+}
+
 .settings-form input::placeholder {
     color: #a3aabe;
 }

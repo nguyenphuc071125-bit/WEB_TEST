@@ -1,4 +1,14 @@
 document.addEventListener("DOMContentLoaded", async () => {
+    document.querySelectorAll(".password-toggle").forEach((button) => {
+        button.addEventListener("click", () => {
+            const input = document.getElementById(button.dataset.target);
+            const isHidden = input.type === "password";
+            input.type = isHidden ? "text" : "password";
+            button.textContent = isHidden ? "Ẩn" : "Hiện";
+            button.setAttribute("aria-label", isHidden ? "Ẩn mật khẩu" : "Hiện mật khẩu");
+        });
+    });
+
     const client = window.supabaseClient;
     if (!client) {
         showMessage("profileMessage", "Không kết nối được Supabase. Hãy tải lại trang.", "error");
@@ -69,8 +79,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     passwordForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         showMessage("passwordMessage", "");
+        const currentPassword = document.getElementById("currentPassword").value;
         const password = document.getElementById("newPassword").value;
         const confirmation = document.getElementById("confirmPassword").value;
+        if (!currentPassword) {
+            showMessage("passwordMessage", "Vui lòng nhập mật khẩu hiện tại.", "error");
+            document.getElementById("currentPassword").focus();
+            return;
+        }
         if (password.length < 8) {
             showMessage("passwordMessage", "Mật khẩu cần có ít nhất 8 ký tự.", "error");
             return;
@@ -82,15 +98,31 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         setBusy(changePasswordButton, true, "Đang cập nhật…", "Cập nhật mật khẩu");
-        const { error } = await client.auth.updateUser({ password });
-        setBusy(changePasswordButton, false, "Đang cập nhật…", "Cập nhật mật khẩu");
-        if (error) {
-            showMessage("passwordMessage", `Không đổi được mật khẩu: ${error.message}`, "error");
-            return;
-        }
+        try {
+            const { error: verifyError } = await client.auth.signInWithPassword({
+                email: user.email,
+                password: currentPassword
+            });
+            if (verifyError) {
+                showMessage("passwordMessage", "Mật khẩu hiện tại không đúng.", "error");
+                document.getElementById("currentPassword").focus();
+                return;
+            }
 
-        passwordForm.reset();
-        showMessage("passwordMessage", "Đã cập nhật mật khẩu.", "success");
+            const { error } = await client.auth.updateUser({ password });
+            if (error) {
+                showMessage("passwordMessage", `Không đổi được mật khẩu: ${error.message}`, "error");
+                return;
+            }
+
+            passwordForm.reset();
+            showMessage("passwordMessage", "Đã cập nhật mật khẩu.", "success");
+        } catch (error) {
+            console.error("Không thể cập nhật mật khẩu:", error);
+            showMessage("passwordMessage", `Không đổi được mật khẩu: ${error.message}`, "error");
+        } finally {
+            setBusy(changePasswordButton, false, "Đang cập nhật…", "Cập nhật mật khẩu");
+        }
     });
 
     signOutButton.addEventListener("click", async () => {

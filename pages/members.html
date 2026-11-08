@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>Thành viên | AECPT</title>
+    <script src="../js/i18n.js"></script>
 
     <!-- Font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -361,6 +362,26 @@
             </div>
 
             <div class="form-group">
+                <label for="memberInitialPassword">Mật khẩu khởi tạo</label>
+                <div class="password-input-container">
+                    <input
+                        type="password"
+                        id="memberInitialPassword"
+                        name="initialPassword"
+                        placeholder="Nhập mật khẩu ban đầu"
+                        minlength="8"
+                        autocomplete="new-password"
+                        required
+                    >
+                    <button type="button" class="password-visibility-toggle"
+                            id="toggleMemberInitialPassword" aria-label="Hiện mật khẩu">
+                        Hiện
+                    </button>
+                </div>
+                <small class="field-hint">Mật khẩu phải có ít nhất 8 ký tự. Gửi cho thành viên qua kênh riêng.</small>
+            </div>
+
+            <div class="form-group">
                 <label for="memberRole">
                     Vai trò
                 </label>
@@ -504,7 +525,7 @@
                     Thời gian rảnh
                 </label>
                 <p class="filed-description">
-                    Chọn những ngày và khung giờ mà thành viên có thể làm việc
+                    Chọn ngày và khung giờ thành viên có thể làm việc (từ 06:00 đến 22:00)
                 </p>
 
                 <div class="weekday-list">

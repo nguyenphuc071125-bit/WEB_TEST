@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Công việc của tôi | AECPT</title>
+    <script src="../js/i18n.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -88,6 +89,42 @@
                     </div>
                     <strong id="completedCount">—</strong>
                 </article>
+                <button type="button" class="stat-card overdue-stat-card" id="overdueTasksCard"
+                        aria-pressed="false" aria-label="Lọc công việc trễ hạn">
+                    <span class="stat-card-top">
+                        <span>Trễ hạn</span>
+                        <i data-lucide="triangle-alert"></i>
+                    </span>
+                    <strong id="overdueTasksCount">—</strong>
+                </button>
+            </section>
+
+            <section class="upcoming-task-alert" id="upcomingTaskAlert"
+                     aria-labelledby="upcomingTaskAlertTitle" aria-live="polite" hidden>
+                <div class="upcoming-task-alert-heading">
+                    <span class="upcoming-task-alert-icon"><i data-lucide="bell-ring"></i></span>
+                    <div>
+                        <h2 id="upcomingTaskAlertTitle">Công việc sắp đến hạn</h2>
+                        <p id="upcomingTaskAlertSummary"></p>
+                    </div>
+                </div>
+                <div class="upcoming-task-alert-list" id="upcomingTaskAlertList"></div>
+            </section>
+
+            <section class="team-deadline-alert"
+                     id="teamUpcomingTaskAlert"
+                     aria-labelledby="teamUpcomingTaskAlertTitle"
+                     aria-live="polite"
+                     hidden>
+                <div class="team-deadline-heading">
+                    <span class="team-deadline-icon"><i data-lucide="calendar-clock"></i></span>
+                    <div>
+                        <h2 id="teamUpcomingTaskAlertTitle">Công việc sắp đến hạn</h2>
+                        <p>Công việc chưa hoàn thành có deadline trong hôm nay và 3 ngày tới.</p>
+                    </div>
+                    <strong class="team-deadline-count" id="teamUpcomingTaskAlertCount">0</strong>
+                </div>
+                <div class="team-deadline-list" id="teamUpcomingTaskAlertList"></div>
             </section>
 
             <!-- Status tabs -->
@@ -97,6 +134,10 @@
                 <button type="button" class="status-tab" data-status="in_progress">Đang thực hiện</button>
                 <button type="button" class="status-tab" data-status="pending_review">Chờ duyệt</button>
                 <button type="button" class="status-tab" data-status="completed">Đã hoàn thành</button>
+                <button type="button" class="status-tab overdue-status-tab" id="overdueTasksTab"
+                        data-overdue-filter aria-pressed="false">
+                    Trễ hạn <span id="overdueTasksTabCount">0</span>
+                </button>
             </nav>
 
             <!-- Tasks table -->

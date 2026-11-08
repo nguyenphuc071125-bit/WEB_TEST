@@ -521,6 +521,30 @@ body {
     transform: translateY(0);
 }
 
+.submit-button:disabled {
+    opacity: .65;
+    cursor: wait;
+    transform: none;
+}
+
+.auth-switch {
+    margin-top: 15px;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-align: center;
+}
+
+.auth-switch .text-button {
+    display: inline;
+    padding: 0;
+}
+
+.signup-notice {
+    margin-top: 12px;
+    color: var(--text-muted);
+    font-size: 9px;
+    line-height: 1.6;
+}
 
 .form-feedback {
     margin-top: 10px;

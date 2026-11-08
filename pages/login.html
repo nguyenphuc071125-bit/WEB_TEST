@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name ="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đăng nhập | AECPT</title>
+    <script src="../js/i18n.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -180,6 +181,51 @@
                     </div>
                 </form>
 
+                <p class="auth-switch">
+                    Chưa có tài khoản?
+                    <button type="button" class="text-button" id="showSignup">Đăng ký</button>
+                </p>
+
+                <form id="signupForm" hidden>
+                    <div class="field-group">
+                        <label for="signupName">Họ và tên</label>
+                        <div class="input-wrap">
+                            <input type="text" id="signupName" name="fullName"
+                                   placeholder="Nhập họ và tên" autocomplete="name"
+                                   maxlength="100" required>
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="signupEmail">Email công việc</label>
+                        <div class="input-wrap">
+                            <input type="email" id="signupEmail" name="email"
+                                   placeholder="Nhập email công việc" autocomplete="email" required>
+                        </div>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="signupPassword">Mật khẩu</label>
+                        <div class="input-wrap">
+                            <input type="password" id="signupPassword" name="password"
+                                   placeholder="Tối thiểu 8 ký tự" autocomplete="new-password"
+                                   minlength="8" required>
+                            <button type="button" id="toggleSignupPassword" class="password-toggle">Hiện</button>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="submit-button" id="signupSubmit">Tạo tài khoản</button>
+                    <p class="form-feedback" id="signupFeedback" role="status" aria-live="polite"></p>
+                    <p class="signup-notice">
+                        Tài khoản đăng ký mới sẽ tự động liên kết với hồ sơ thành viên và được cấp vai trò Trưởng nhóm.
+                    </p>
+                </form>
+
+                <p class="auth-switch signup-switch" id="showLoginRow" hidden>
+                    Đã có tài khoản?
+                    <button type="button" class="text-button" id="showLogin">Đăng nhập</button>
+                </p>
+
                 <div class="form-driver"></div>
 
                 <p class="system-note">
@@ -202,4 +248,3 @@
     <script src="../js/login.js"></script>
 </body>
 </html>
-

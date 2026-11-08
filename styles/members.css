@@ -1125,6 +1125,32 @@ button {
     color: var(--text-secondary);
 }
 
+.password-input-container {
+    position: relative;
+}
+
+.password-input-container input {
+    padding-right: 58px !important;
+}
+
+.password-visibility-toggle {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    padding: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.password-visibility-toggle:hover {
+    color: var(--primary);
+}
+
 /* FIELD DESCRIPTION */
 
 .field-hint,
@@ -1336,50 +1362,34 @@ button {
 
 .availability-day-heading strong { color: var(--text-primary); font-size: 12px; }
 
-.availability-time-row {
+.availability-hour-list {
     display: flex;
-    align-items: end;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 5px;
+    overflow-x: auto;
+    padding: 2px 0 8px;
+    scrollbar-width: thin;
 }
 
-.availability-time-row label {
-    display: grid;
-    flex: 1;
-    gap: 4px;
+.availability-hour-option {
+    flex: 0 0 46px;
+    min-height: 36px;
+    padding: 0 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--white);
     color: var(--text-secondary);
     font-size: 10px;
-}
-
-.availability-time-row input {
-    min-width: 0;
-    height: 34px;
-    padding: 0 8px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--white);
-    color: var(--text-primary);
-}
-
-.availability-remove-btn,
-.availability-add-btn {
-    min-height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--white);
-    color: var(--text-secondary);
     cursor: pointer;
-    font-size: 10px;
 }
 
-.availability-add-btn {
+.availability-hour-option.is-selected {
+    background: var(--primary-light);
+    border-color: #AEB8FF;
     color: var(--primary-dark);
-    border-color: #C9D0FF;
+    font-weight: 600;
 }
 
-.availability-remove-btn:hover,
-.availability-add-btn:hover {
+.availability-hour-option:hover {
     background: var(--primary-light);
 }
 

@@ -33,7 +33,6 @@ let currentFilter = "all";
 let currentMemberId = null;
 let searchKeyword = "";
 let isLoading = false;
-let activeAvailabilityDay = null;
 let availabilityByDay = {};
 
 
@@ -118,7 +117,7 @@ async function loadMembers() {
     showLoading();
 
     try {
-        const [membersResult, availabilityResult] = await Promise.all([
+        const [membersResult, availabilityResult, accountRolesResult] = await Promise.all([
             window.supabaseClient
                 .from("members")
                 .select(`
@@ -138,11 +137,15 @@ async function loadMembers() {
                 .from("member_availability")
                 .select("availability_id, member_id, weekday, start_time, end_time")
                 .order("weekday")
-                .order("start_time")
+                .order("start_time"),
+            window.supabaseClient
+                .from("team_members")
+                .select("member_id, account_role")
         ]);
 
         if (membersResult.error) throw membersResult.error;
         if (availabilityResult.error) throw availabilityResult.error;
+        if (accountRolesResult.error) throw accountRolesResult.error;
 
         const availabilityByMember = new Map();
         (availabilityResult.data || []).forEach(row => {
@@ -150,14 +153,20 @@ async function loadMembers() {
             memberAvailability.push(row);
             availabilityByMember.set(String(row.member_id), memberAvailability);
         });
+        const accountRoleByMember = new Map(
+            (accountRolesResult.data || []).map(row => [
+                String(row.member_id),
+                formatAccountRole(row.account_role)
+            ])
+        );
 
         members = (membersResult.data || []).map(member => {
             const roles = Array.isArray(member.member_roles)
                 ? member.member_roles
                 : [];
-            const groups = roles
-                .map(memberRole => memberRole.role)
-                .filter(Boolean);
+            const groups = [...new Set(roles
+                .map(memberRole => normalizeMemberGroup(memberRole.role))
+                .filter(Boolean))];
 
             return {
                 id: member.member_id,
@@ -165,7 +174,7 @@ async function loadMembers() {
                 email: member.email || "",
                 groups,
                 group: groups.join(", "),
-                role: groups.join(", ") || "Thành viên",
+                role: accountRoleByMember.get(String(member.member_id)) || "Thành viên",
                 status: member.is_active
                     ? "active"
                     : "inactive",
@@ -207,7 +216,7 @@ function getFilteredMembers() {
         const matchesGroup =
             currentFilter === "all" ||
             groups.some(group =>
-                group.toLowerCase() === currentFilter.toLowerCase()
+                normalizeMemberGroup(group) === normalizeMemberGroup(currentFilter)
             );
 
         return matchesSearch && matchesGroup;
@@ -218,20 +227,58 @@ function getFilteredMembers() {
 
 
 function getMemberGroups(member) {
-    if (Array.isArray(member.groups)) {
-        return member.groups;
-    }
-
     const roles = Array.isArray(member.member_roles)
-        ? member.member_roles
-            .map(memberRole => memberRole.role)
-            .filter(Boolean)
+        ? member.member_roles.map(memberRole => memberRole.role)
         : [];
-    const group = member.group || member.department;
+    const legacyGroups = [member.group, member.department]
+        .flatMap(value => Array.isArray(value)
+            ? value
+            : String(value || "").split(","));
+    const groups = [
+        ...(Array.isArray(member.groups) ? member.groups : []),
+        ...roles,
+        ...legacyGroups
+    ]
+        .filter(Boolean)
+        .map(normalizeMemberGroup)
+        .filter(Boolean);
 
-    return group
-        ? [...new Set([...roles, group])]
-        : roles;
+    return [...new Set(groups)];
+}
+
+function normalizeMemberGroup(value) {
+    const normalized = String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s-]+/g, "_");
+
+    const groupLabels = {
+        edit: "Edit",
+        editor: "Edit",
+        video_editor: "Edit",
+        design: "Design",
+        designer: "Design",
+        content: "Content",
+        content_writer: "Content",
+        content_creator: "Content",
+        tech: "Tech",
+        technician: "Tech",
+        technical: "Tech",
+        photo: "Photo",
+        photographer: "Photo",
+        photography: "Photo"
+    };
+
+    return groupLabels[normalized] || String(value || "").trim();
+}
+
+function formatAccountRole(value) {
+    const role = String(value || "").trim().toLowerCase();
+    if (role === "leader" || role === "trưởng nhóm") return "Trưởng nhóm";
+    if (role === "member" || role === "thành viên") return "Thành viên";
+    return value ? String(value).trim() : "Thành viên";
 }
 
 
@@ -357,7 +404,7 @@ function updateMemberCounts() {
         const count = members.filter(member => {
 
             return getMemberGroups(member).some(memberGroup =>
-                memberGroup.toLowerCase() === group.toLowerCase()
+                normalizeMemberGroup(memberGroup) === normalizeMemberGroup(group)
             );
 
         }).length;
@@ -709,8 +756,24 @@ function closeAddMemberModal() {
     if (!DOM.addModal) return;
 
     DOM.addModal.hidden = true;
+    const passwordInput = DOM.addForm?.elements.initialPassword;
+    if (passwordInput) passwordInput.value = "";
 
 }
+
+const toggleInitialPasswordButton = document.getElementById("toggleMemberInitialPassword");
+toggleInitialPasswordButton?.addEventListener("click", () => {
+    const passwordInput = DOM.addForm?.elements.initialPassword;
+    if (!passwordInput) return;
+
+    const showPassword = passwordInput.type === "password";
+    passwordInput.type = showPassword ? "text" : "password";
+    toggleInitialPasswordButton.textContent = showPassword ? "Ẩn" : "Hiện";
+    toggleInitialPasswordButton.setAttribute(
+        "aria-label",
+        showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"
+    );
+});
 
 
 if (DOM.openAddButton) {
@@ -802,9 +865,11 @@ const DB_WEEKDAY_TO_UI_DAY = {
     0: "8", 1: "2", 2: "3", 3: "4", 4: "5", 5: "6", 6: "7"
 };
 
+const AVAILABILITY_START_LIMIT = "06:00";
+const AVAILABILITY_END_LIMIT = "22:00";
+
 function initializeAvailability(value = {}) {
     availabilityByDay = {};
-    activeAvailabilityDay = null;
 
     if (Array.isArray(value)) {
         value.forEach(row => {
@@ -818,7 +883,6 @@ function initializeAvailability(value = {}) {
         });
     }
 
-    activeAvailabilityDay = Object.keys(availabilityByDay)[0] || null;
     renderAvailabilitySlots();
 }
 
@@ -839,6 +903,20 @@ function renderAvailabilitySummary(rows) {
     return `<ul class="availability-summary">${[...byDay.entries()]
         .map(([day, ranges]) => `<li><strong>${day}</strong><span>${ranges.map(escapeHTML).join(", ")}</span></li>`)
         .join("")}</ul>`;
+}
+
+function getSelectedAvailabilityHours(ranges) {
+    const hours = new Set();
+    ranges.forEach(range => {
+        for (let hour = 6; hour < 22; hour++) {
+            const startTime = `${String(hour).padStart(2, "0")}:00`;
+            const endTime = `${String(hour + 1).padStart(2, "0")}:00`;
+            if (range.startTime < endTime && range.endTime > startTime) {
+                hours.add(hour);
+            }
+        }
+    });
+    return hours;
 }
 
 function renderAvailabilitySlots() {
@@ -867,80 +945,73 @@ function renderAvailabilitySlots() {
     }
 
     container.innerHTML = selectedDays.map(day => {
-        const ranges = availabilityByDay[day] || [];
+        const selectedHours = getSelectedAvailabilityHours(availabilityByDay[day] || []);
         return `
             <section class="availability-day-row">
                 <div class="availability-day-heading">
                     <strong>${AVAILABILITY_DAY_NAMES[day]}</strong>
-                    <span>${ranges.length ? `${ranges.length} khung giờ` : "Chưa chọn giờ"}</span>
+                    <span>Chọn giờ rảnh</span>
                 </div>
-                <div class="availability-time-list">
-                    ${ranges.map((range, index) => `
-                        <div class="availability-time-row">
-                            <label>
-                                <span>Bắt đầu</span>
-                                <input type="time" value="${escapeHTML(range.startTime)}"
-                                       data-availability-field="startTime" data-day="${day}" data-index="${index}">
-                            </label>
-                            <label>
-                                <span>Kết thúc</span>
-                                <input type="time" value="${escapeHTML(range.endTime)}"
-                                       data-availability-field="endTime" data-day="${day}" data-index="${index}">
-                            </label>
-                            <button type="button" class="availability-remove-btn"
-                                    data-remove-availability="${day}" data-index="${index}"
-                                    aria-label="Xóa khung giờ ${index + 1} ${AVAILABILITY_DAY_NAMES[day]}">Xóa</button>
-                        </div>
-                    `).join("")}
+                <div class="availability-hour-list" role="group" aria-label="Chọn giờ rảnh ${AVAILABILITY_DAY_NAMES[day]}">
+                    ${Array.from({ length: 16 }, (_, index) => index + 6).map(hour => {
+                        const time = `${String(hour).padStart(2, "0")}:00`;
+                        const endTime = `${String(hour + 1).padStart(2, "0")}:00`;
+                        const selected = selectedHours.has(hour);
+                        return `
+                            <button type="button" class="availability-hour-option${selected ? " is-selected" : ""}"
+                                    data-availability-hour="${hour}" data-day="${day}"
+                                    aria-pressed="${selected}"
+                                    aria-label="${time} đến ${endTime}">
+                                ${time}
+                            </button>
+                        `;
+                    }).join("")}
                 </div>
-                <button type="button" class="availability-add-btn" data-add-availability="${day}">
-                    + Thêm khung giờ
-                </button>
             </section>
         `;
-    }).join("");
+    }).join("") + '<p class="availability-help">Mỗi ô tương ứng 1 giờ. Chọn liên tiếp để tạo thành một khoảng giờ rảnh.</p>';
 }
 
 document.addEventListener("click", event => {
     const dayButton = event.target.closest("[data-availability-day]");
     if (dayButton) {
-        activeAvailabilityDay = dayButton.dataset.availabilityDay;
-        if (Object.hasOwn(availabilityByDay, activeAvailabilityDay)) {
-            delete availabilityByDay[activeAvailabilityDay];
+        const day = dayButton.dataset.availabilityDay;
+        if (Object.hasOwn(availabilityByDay, day)) {
+            delete availabilityByDay[day];
         } else {
-            availabilityByDay[activeAvailabilityDay] = [];
+            availabilityByDay[day] = [];
         }
         renderAvailabilitySlots();
         return;
     }
 
-    const addButton = event.target.closest("[data-add-availability]");
-    if (addButton) {
-        const day = addButton.dataset.addAvailability;
-        availabilityByDay[day].push({ startTime: "09:00", endTime: "10:00" });
+    const hourButton = event.target.closest("[data-availability-hour]");
+    if (hourButton) {
+        const day = hourButton.dataset.day;
+        const hour = Number(hourButton.dataset.availabilityHour);
+        const selectedHours = getSelectedAvailabilityHours(availabilityByDay[day] || []);
+
+        if (selectedHours.has(hour)) {
+            selectedHours.delete(hour);
+        } else {
+            selectedHours.add(hour);
+        }
+
+        const sortedHours = [...selectedHours].sort((a, b) => a - b);
+        const ranges = [];
+        sortedHours.forEach(selectedHour => {
+            const startTime = `${String(selectedHour).padStart(2, "0")}:00`;
+            const endTime = `${String(selectedHour + 1).padStart(2, "0")}:00`;
+            const previousRange = ranges[ranges.length - 1];
+            if (previousRange && previousRange.endTime === startTime) {
+                previousRange.endTime = endTime;
+            } else {
+                ranges.push({ startTime, endTime });
+            }
+        });
+        availabilityByDay[day] = ranges;
         renderAvailabilitySlots();
-        return;
     }
-
-    const removeButton = event.target.closest("[data-remove-availability]");
-    if (removeButton) {
-        const day = removeButton.dataset.removeAvailability;
-        availabilityByDay[day].splice(Number(removeButton.dataset.index), 1);
-        renderAvailabilitySlots();
-    }
-});
-
-document.addEventListener("input", event => {
-    const field = event.target.closest("[data-availability-field]");
-    if (!field) return;
-
-    const day = field.dataset.day;
-    const index = Number(field.dataset.index);
-    const range = availabilityByDay[day]?.[index];
-    if (range) range[field.dataset.availabilityField] = field.value;
-
-    const hidden = document.getElementById("availabilityValue");
-    if (hidden) hidden.value = JSON.stringify(availabilityByDay);
 });
 
 async function saveMemberAvailability() {
@@ -954,6 +1025,10 @@ async function saveMemberAvailability() {
             const range = sortedRanges[index];
             if (!range.startTime || !range.endTime || range.endTime <= range.startTime) {
                 showAvailabilityMessage("Mỗi khung giờ cần có giờ kết thúc sau giờ bắt đầu.", "error");
+                return;
+            }
+            if (range.startTime < AVAILABILITY_START_LIMIT || range.endTime > AVAILABILITY_END_LIMIT) {
+                showAvailabilityMessage("Khung giờ phải nằm trong khoảng 06:00–22:00.", "error");
                 return;
             }
             if (index > 0 && range.startTime < sortedRanges[index - 1].endTime) {
@@ -1165,41 +1240,118 @@ if (DOM.updateForm) {
         if (!currentMemberId) return;
 
         const formData = new FormData(DOM.updateForm);
+        const memberName = String(formData.get("memberName") || "").trim();
+        const selectedGroups = [...new Set(formData.getAll("groups").map(String))];
+        const submitButton = DOM.updateForm.querySelector('button[type="submit"]');
+        const member = members.find(item =>
+            String(item.id) === String(currentMemberId)
+        );
 
-        const payload = Object.fromEntries(formData.entries());
-        // FormData.entries() chỉ lấy một giá trị khi có nhiều checkbox cùng tên.
-        // Dùng getAll() để gửi đầy đủ các nhóm chức năng đã chọn.
-        payload.groups = formData.getAll("groups");
-        payload.days = Object.keys(availabilityByDay)
-            .filter(day => availabilityByDay[day]?.length);
-        try {
-            payload.availability = JSON.parse(formData.get("availability") || "{}");
-        } catch (_) {
-            payload.availability = {};
+        if (!member) {
+            alert("Không tìm thấy thành viên cần cập nhật.");
+            return;
+        }
+        if (!memberName) {
+            document.getElementById("updateNameError").style.display = "block";
+            document.getElementById("updateMemberName").focus();
+            return;
+        }
+
+        const previousButtonText = submitButton?.textContent;
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = "Đang lưu…";
         }
 
         try {
+            const { data: updatedMember, error: memberError } = await window.supabaseClient
+                .from("members")
+                .update({ member_label: memberName })
+                .eq("member_id", currentMemberId)
+                .select("member_id");
+            if (memberError) throw memberError;
+            if (!updatedMember?.length) {
+                throw new Error("Không có dữ liệu được cập nhật. Kiểm tra quyền cập nhật thành viên (RLS).");
+            }
 
-            await apiRequest(
-                API_CONFIG.endpoints.update(currentMemberId),
-                {
-                    method: "PATCH",
-                    body: JSON.stringify(payload)
-                }
+            const existingRoles = member.member_roles || [];
+            const selectableGroups = new Set(
+                [...DOM.updateForm.querySelectorAll('input[name="groups"]')]
+                    .map(input => normalizeMemberGroup(input.value))
             );
+            const selectedGroupSet = new Set(selectedGroups.map(normalizeMemberGroup));
+            const removeRole = async role => {
+                const { data, error } = await window.supabaseClient
+                    .from("member_roles")
+                    .delete()
+                    .eq("member_id", currentMemberId)
+                    .eq("role", role)
+                    .select("role");
+                if (error) throw error;
+                if (!data?.length) {
+                    throw new Error(`Không thể xóa vai trò "${role}". Kiểm tra quyền member_roles (RLS).`);
+                }
+            };
 
+            for (const group of selectableGroups) {
+                const matchingRoles = existingRoles.filter(item =>
+                    normalizeMemberGroup(item.role) === group
+                );
+                const canonicalRole = matchingRoles.find(item => item.role === group);
+
+                if (selectedGroupSet.has(group)) {
+                    if (!canonicalRole && matchingRoles.length) {
+                        const [roleToRename, ...duplicateRoles] = matchingRoles;
+                        const { data: renamedRole, error: renameError } = await window.supabaseClient
+                            .from("member_roles")
+                            .update({ role: group })
+                            .eq("member_id", currentMemberId)
+                            .eq("role", roleToRename.role)
+                            .select("role");
+                        if (renameError) throw renameError;
+                        if (!renamedRole?.length) {
+                            throw new Error(`Không thể đồng bộ vai trò "${roleToRename.role}" thành "${group}". Kiểm tra quyền member_roles (RLS).`);
+                        }
+
+                        for (const duplicate of duplicateRoles) {
+                            await removeRole(duplicate.role);
+                        }
+                    } else if (!matchingRoles.length) {
+                        const { error: insertRoleError } = await window.supabaseClient
+                            .from("member_roles")
+                            .insert({
+                                member_id: currentMemberId,
+                                role: group,
+                                in_roster: false,
+                                n_tasks_assigned: 0
+                            });
+                        if (insertRoleError) throw insertRoleError;
+                    } else {
+                        for (const duplicate of matchingRoles) {
+                            if (duplicate === canonicalRole) continue;
+                            await removeRole(duplicate.role);
+                        }
+                    }
+                } else {
+                    for (const role of matchingRoles) {
+                        await removeRole(role.role);
+                    }
+                }
+            }
+
+            const memberId = currentMemberId;
             closeUpdateMemberModal();
-
             await loadMembers();
-
-            await openMemberDetail(currentMemberId);
+            await openMemberDetail(memberId);
 
         } catch (error) {
-
             console.error("Không thể cập nhật thành viên:", error);
-
-            alert("Không thể cập nhật thông tin. Vui lòng thử lại.");
-
+            alert(`Không thể cập nhật thông tin: ${error.message || "Lỗi Supabase không xác định."}`);
+        } finally {
+            if (submitButton) {
+                submitButton.disabled = false;
+                submitButton.textContent = previousButtonText || "Lưu thành viên";
+            }
         }
 
     });
@@ -1216,11 +1368,13 @@ function fillForm(form, data) {
     if (!form || !data) return;
 
     // Chuẩn hóa dữ liệu nhóm để hỗ trợ cả API trả về groups hoặc group.
+    const groups = Array.isArray(data.groups)
+        ? data.groups
+        : (data.group ? String(data.group).split(",").map(item => item.trim()).filter(Boolean) : []);
     const formData = {
         ...data,
-        groups: Array.isArray(data.groups)
-            ? data.groups
-            : (data.group ? String(data.group).split(",").map(item => item.trim()).filter(Boolean) : [])
+        memberName: data.memberName || data.name || data.member_label || "",
+        groups: groups.map(normalizeMemberGroup)
     };
 
     Object.entries(formData).forEach(([key, value]) => {

@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Danh sách công việc | AECPT</title>
+    <script src="../js/i18n.js"></script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -136,8 +137,37 @@
 
                 </article>
 
+                <button type="button"
+                        class="summary-card overdue-summary-card"
+                        id="overdueTasksCard"
+                        aria-pressed="false">
+
+                    <span class="summary-card-header">
+                        <span>Trễ hạn</span>
+                        <i data-lucide="triangle-alert"></i>
+                    </span>
+
+                    <strong id="overdueTasksCount">—</strong>
+
+                </button>
+
             </div>
 
+        </section>
+
+        <section class="team-deadline-alert"
+                 id="teamDeadlineAlert"
+                 aria-labelledby="teamDeadlineHeading"
+                 hidden>
+            <div class="team-deadline-heading">
+                <span class="team-deadline-icon"><i data-lucide="calendar-clock"></i></span>
+                <div>
+                    <h2 id="teamDeadlineHeading">Công việc nhóm sắp đến hạn</h2>
+                    <p>Công việc chưa hoàn thành có deadline trong hôm nay và 3 ngày tới.</p>
+                </div>
+                <strong class="team-deadline-count" id="teamDeadlineCount">0</strong>
+            </div>
+            <div class="team-deadline-list" id="teamDeadlineList"></div>
         </section>
 
 
@@ -224,6 +254,14 @@
                         Đã hoàn thành
                     </button>
 
+                    <button type="button"
+                            class="status-tab overdue-status-tab"
+                            id="overdueTasksTab"
+                            data-overdue-filter
+                            aria-pressed="false">
+                        Trễ hạn <span id="overdueTasksTabCount">0</span>
+                    </button>
+
                 </div>
 
 
@@ -271,6 +309,18 @@
                         <option value="Content">Content</option>
                         <option value="Tech">Tech</option>
                         <option value="Photo">Photo</option>
+                    </select>
+
+                </div>
+
+                <div class="filter-field">
+
+                    <label for="memberFilter">
+                        Thành viên phụ trách
+                    </label>
+
+                    <select id="memberFilter">
+                        <option value="">Tất cả thành viên</option>
                     </select>
 
                 </div>

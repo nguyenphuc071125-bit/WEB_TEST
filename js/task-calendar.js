@@ -20,6 +20,10 @@
         view: "month",
         ganttScale: "day",
         myTasksOnly: false,
+        period: "all",
+        customDateFrom: "",
+        customDateTo: "",
+        eventId: "",
         selectedTaskId: null,
         currentUserId: null,
         currentMemberId: CONFIG.memberId,
@@ -47,6 +51,11 @@
         weekBtn: $("#weekViewBtn"),
         ganttBtn: $("#ganttViewBtn"),
         personalBtn: $("#myTasksOnlyBtn"),
+        periodFilter: $("#calendarPeriodFilter"),
+        customDateRange: $("#calendarCustomDateRange"),
+        dateFrom: $("#calendarDateFrom"),
+        dateTo: $("#calendarDateTo"),
+        eventFilter: $("#calendarEventFilter"),
 
         monthView: $("#monthView"),
         weekView: $("#weekView"),
@@ -97,18 +106,16 @@
         openFullTaskBtn: $("#openFullTaskBtn")
     };
 
-    const monthNames = [
-        "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4",
-        "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8",
-        "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
-    ];
-
-    const weekdayNames = [
-        "Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4",
-        "Thứ 5", "Thứ 6", "Thứ 7"
-    ];
-
-    const weekdayShort = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+    const isEnglish = window.AppI18n?.language === "en";
+    const monthNames = isEnglish
+        ? ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+        : ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
+    const weekdayNames = isEnglish
+        ? ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+        : ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"];
+    const weekdayShort = isEnglish
+        ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+        : ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 
     function escapeHTML(value) {
         return String(value ?? "").replace(/[&<>"']/g, char => ({
@@ -168,7 +175,7 @@
     function formatDate(date, options = {}) {
         if (!date) return "Chưa có dữ liệu";
 
-        return new Intl.DateTimeFormat("vi-VN", {
+        return new Intl.DateTimeFormat(window.AppI18n?.locale || "vi-VN", {
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
@@ -312,6 +319,13 @@
         return Array.isArray(task.events) ? task.events[0] : task.events;
     }
 
+    function getTaskEventLabel(task) {
+        const event = getTaskEvent(task);
+        return event
+            ? [event.event_label, event.event_category].filter(Boolean).join(" · ") || task.event_id
+            : task.event_id || "Chưa gắn sự kiện";
+    }
+
     function priorityLabel(priority) {
         return {
             low: "Thấp",
@@ -324,6 +338,12 @@
         let rows = state.tasks.filter(task =>
             !task.is_cancelled && task.status !== "cancelled"
         );
+
+        if (state.eventId) {
+            rows = rows.filter(task =>
+                String(task.event_id || "") === state.eventId
+            );
+        }
 
         if (state.myTasksOnly && state.currentMemberId) {
             rows = rows.filter(task =>
@@ -344,11 +364,84 @@
                 deadline: getTaskDeadline(task)
             }))
             .filter(item => item.deadline)
+            .filter(({ task, deadline }) => matchesPeriod(task, deadline))
             .sort((a, b) => a.deadline - b.deadline);
     }
 
+    function matchesPeriod(task, deadline, now = new Date()) {
+        if (state.period === "all") return true;
+        if (state.period === "overdue") return isOverdue(task, deadline, now);
+
+        const startOfToday = startOfDay(now);
+        if (state.period === "next7" ||
+            state.period === "next30" ||
+            state.period === "next90") {
+            const days = Number(state.period.slice(4));
+            const endExclusive = addDays(startOfToday, days);
+            return deadline >= startOfToday &&
+                deadline < endExclusive &&
+                !isOverdue(task, deadline, now);
+        }
+
+        if (state.period === "custom") {
+            if (state.customDateFrom) {
+                const from = parseDate(state.customDateFrom);
+                if (from && deadline < startOfDay(from)) return false;
+            }
+            if (state.customDateTo) {
+                const to = parseDate(state.customDateTo);
+                if (to && deadline >= addDays(startOfDay(to), 1)) return false;
+            }
+        }
+
+        return true;
+    }
+
     function isOverdue(task, deadline, now = new Date()) {
-        return !!deadline && deadline < now && !isCompleted(task);
+        if (!deadline || isCompleted(task)) return false;
+        if (task.package_deadline_at || task.package_deadline_time) {
+            return deadline < now;
+        }
+        return startOfDay(deadline) < startOfDay(now);
+    }
+
+    function populateEventFilter() {
+        if (!elements.eventFilter) return;
+
+        const events = new Map();
+        state.tasks.forEach(task => {
+            if (task.event_id == null) return;
+            const id = String(task.event_id);
+            if (!events.has(id)) events.set(id, getTaskEventLabel(task));
+        });
+
+        const options = [...events.entries()]
+            .sort((a, b) => a[1].localeCompare(b[1], window.AppI18n?.locale || "vi"))
+            .map(([id, label]) =>
+                `<option value="${escapeHTML(id)}">${escapeHTML(label)}</option>`
+            );
+
+        elements.eventFilter.innerHTML =
+            '<option value="">Tất cả sự kiện</option>' + options.join("");
+        elements.eventFilter.value = state.eventId;
+    }
+
+    function syncPeriodControls() {
+        if (elements.periodFilter) {
+            elements.periodFilter.value = state.period;
+        }
+        if (elements.customDateRange) {
+            elements.customDateRange.hidden = state.period !== "custom";
+        }
+        if (elements.dateFrom) {
+            elements.dateFrom.value = state.customDateFrom;
+        }
+        if (elements.dateTo) {
+            elements.dateTo.value = state.customDateTo;
+        }
+        if (elements.eventFilter) {
+            elements.eventFilter.value = state.eventId;
+        }
     }
 
     function getDeadlineClass(task, deadline) {
@@ -507,8 +600,9 @@
                 sameDay(date, new Date()) ? "is-today" : "",
                 sameDay(date, state.selectedDate) ? "is-selected" : ""
             ].filter(Boolean).join(" ");
-            const dayLabel =
-                `${weekdayNames[date.getDay()]}, ngày ${formatDate(date)}`;
+            const dayLabel = isEnglish
+                ? `${weekdayNames[date.getDay()]}, ${formatDate(date)}`
+                : `${weekdayNames[date.getDay()]}, ngày ${formatDate(date)}`;
 
             const taskMarkup = dayTasks.slice(0, 3).map(({ task, deadline }) => `
                 <button type="button"
@@ -605,7 +699,7 @@
                             <button type="button"
                                     class="week-day-select"
                                     data-select-date="${dateKey(date)}"
-                                    aria-label="Chọn ${weekdayNames[date.getDay()]}, ngày ${formatDate(date)}"
+                                    aria-label="${isEnglish ? "Select" : "Chọn"} ${weekdayNames[date.getDay()]}, ${isEnglish ? "" : "ngày "}${formatDate(date)}"
                                     aria-pressed="${sameDay(date, state.selectedDate)}">
                                 <span class="week-day-name">
                                     ${weekdayShort[date.getDay()]}
@@ -664,8 +758,9 @@
         );
 
         if (elements.dayTitle) {
-            elements.dayTitle.textContent =
-                `${weekdayNames[date.getDay()]}, ngày ${formatDate(date)}`;
+            elements.dayTitle.textContent = isEnglish
+                ? `${weekdayNames[date.getDay()]}, ${formatDate(date)}`
+                : `${weekdayNames[date.getDay()]}, ngày ${formatDate(date)}`;
         }
 
         if (elements.dayCount) {
@@ -743,6 +838,28 @@
        GANTT CHART
     ============================== */
 
+    function updateGanttTodayLabelVisibility() {
+        const label = elements.ganttChart?.querySelector(".gantt-today-label");
+        const line = elements.ganttChart?.querySelector(".gantt-today-line");
+        if (!label || !line || !elements.ganttScroll) return;
+
+        const scrollBounds = elements.ganttScroll.getBoundingClientRect();
+        const stickyColumn = elements.ganttChart.querySelector(".gantt-task-info");
+        const stickyRight = stickyColumn
+            ? stickyColumn.getBoundingClientRect().right
+            : scrollBounds.left;
+        const labelBounds = label.getBoundingClientRect();
+        const lineX = line.getBoundingClientRect().left;
+        const visibleLeft = Math.max(scrollBounds.left, stickyRight);
+        const isVisible =
+            lineX >= visibleLeft &&
+            lineX <= scrollBounds.right &&
+            labelBounds.left >= visibleLeft &&
+            labelBounds.right <= scrollBounds.right;
+
+        label.style.visibility = isVisible ? "visible" : "hidden";
+    }
+
     function renderGanttView() {
         if (!elements.ganttChart) return;
 
@@ -774,9 +891,12 @@
             return;
         }
 
-        // Gantt displays the deadline marker and the stored start date.
         const monthStart = new Date(year, month, 1);
         const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const today = new Date();
+        const isTodayInMonth =
+            today.getFullYear() === year &&
+            today.getMonth() === month;
 
         const visibleItems = items.filter(({ deadline }) =>
             deadline.getFullYear() === year &&
@@ -792,46 +912,76 @@
         const headerCells = Array.from(
             { length: columns },
             (_, index) => {
-
-                let label;
-
                 if (state.ganttScale === "month") {
-                    label = formatMonth(monthStart);
-                } else if (state.ganttScale === "week") {
-                    label = `Tuần ${index + 1}`;
-                } else {
-                    label = String(index + 1).padStart(2, "0");
+                    return `<div><span>${escapeHTML(isEnglish ? "Month" : "Tháng")}</span></div>`;
                 }
 
-                return `<div>${escapeHTML(label)}</div>`;
+                if (state.ganttScale === "week") {
+                    const weekStart = index * 7 + 1;
+                    const weekEnd = Math.min(daysInMonth, weekStart + 6);
+                    return `<div><span>${weekStart}–${weekEnd}</span></div>`;
+                }
+
+                const date = new Date(year, month, index + 1);
+                const dayLabel = isEnglish
+                    ? new Intl.DateTimeFormat(
+                        window.AppI18n?.locale || "en-US",
+                        { weekday: "short" }
+                    ).format(date)
+                    : date.getDay() === 0
+                        ? "CN"
+                        : `T${date.getDay() + 1}`;
+                return `<div class="gantt-day-header ${isTodayInMonth && date.getDate() === today.getDate() ? "is-today" : ""}">
+                    <span>${escapeHTML(dayLabel)}</span>
+                    <strong>${String(index + 1).padStart(2, "0")}</strong>
+                </div>`;
             }
         ).join("");
 
-        const rows = visibleItems.map(({ task, deadline }) => {
-            const start = getTaskStart(task);
+        const todayPosition = ((today.getDate() - 0.5) / daysInMonth) * 100;
+        const todayHeaderLine = isTodayInMonth && state.ganttScale === "day"
+            ? `<span class="gantt-today-line" style="left:calc(${todayPosition}%);"></span>`
+            : "";
 
-            let columnIndex;
+        const rows = visibleItems.map(({ task, deadline }, rowIndex) => {
+            const recordedStart = getTaskStart(task);
+            const start = recordedStart && recordedStart < deadline
+                ? recordedStart
+                : deadline;
+            const startDay = start < monthStart
+                ? 1
+                : Math.min(daysInMonth, start.getDate());
+            const endDay = Math.max(startDay, Math.min(daysInMonth, deadline.getDate()));
+            const startIndex = state.ganttScale === "month"
+                ? 0
+                : state.ganttScale === "week"
+                    ? Math.floor((startDay - 1) / 7)
+                    : startDay - 1;
+            const endIndex = state.ganttScale === "month"
+                ? 0
+                : state.ganttScale === "week"
+                    ? Math.floor((endDay - 1) / 7)
+                    : endDay - 1;
+            const leftPercent = (startIndex / columns) * 100;
+            const widthPercent = ((endIndex - startIndex + 1) / columns) * 100;
+            const completed = isCompleted(task);
+            const progress = completed
+                ? 100
+                : Math.max(0, Math.min(100, Number(task.progress) || 0));
+            const startLabel = recordedStart
+                ? formatDate(recordedStart, { day: "2-digit", month: "2-digit" })
+                : (isEnglish ? "No start date" : "Chưa có ngày bắt đầu");
+            const endLabel = formatDate(deadline, { day: "2-digit", month: "2-digit" });
+            const dateRangeLabel = `${startLabel} – ${endLabel}`;
+            const title = `${task.task_title || (isEnglish ? "Untitled task" : "Công việc chưa có tên")} · ${dateRangeLabel} · ${progress}%`;
+            const taskRoles = getTaskRoles(task);
 
-            if (state.ganttScale === "month") {
-                columnIndex = 0;
-            } else if (state.ganttScale === "week") {
-                columnIndex = Math.floor((deadline.getDate() - 1) / 7);
-            } else {
-                columnIndex = deadline.getDate() - 1;
-            }
-
-            const status = getStatus(task);
-            const timelineCells = Array.from({ length: columns }, (_, index) => `
-                <div class="gantt-timeline-cell">
-                    ${index === columnIndex ? `
-                        <button type="button"
-                                class="gantt-deadline-marker"
-                                data-task-id="${escapeHTML(task.task_id)}"
-                                title="Deadline: ${formatDate(deadline)}"
-                                aria-label="Mở công việc ${escapeHTML(task.task_title || "")}"></button>
-                    ` : ""}
-                </div>
-            `).join("");
+            const todayLine = isTodayInMonth && state.ganttScale === "day"
+                ? `<span class="gantt-today-line" style="left:calc(${todayPosition}%);"></span>`
+                : "";
+            const todayLabel = todayLine && rowIndex === visibleItems.length - 1
+                ? `<span class="gantt-today-label" style="left:calc(${todayPosition}%);">${escapeHTML(isEnglish ? "Today" : "Hôm nay")}</span>`
+                : "";
 
             return `
                 <div class="gantt-row">
@@ -840,20 +990,20 @@
 
                         <div class="gantt-task-name">
 
-                            ${escapeHTML(task.task_title || "Công việc chưa có tên")}
+                            ${escapeHTML(task.task_title || (isEnglish ? "Untitled task" : "Công việc chưa có tên"))}
 
                             <span class="gantt-task-subtitle">
-                                ${escapeHTML(statusLabel(status))} · ${Math.max(0, Math.min(100, Number(task.progress) || 0))}%
+                                ${escapeHTML(statusLabel(getStatus(task)))} · ${progress}%
                             </span>
 
                         </div>
 
-                        <span class="gantt-task-group">
-                            ${escapeHTML(getTaskRoles(task))}
+                        <span class="gantt-task-group" title="${escapeHTML(taskRoles)}">
+                            ${escapeHTML(taskRoles)}
                         </span>
 
                         <span class="gantt-task-date">
-                            ${start ? formatDate(start, { day: "2-digit", month: "2-digit" }) : "—"}
+                            ${recordedStart ? formatDate(recordedStart, { day: "2-digit", month: "2-digit" }) : "—"}
                         </span>
 
                         <span class="gantt-task-date">
@@ -866,19 +1016,19 @@
                          data-scale="${state.ganttScale}"
                          style="--gantt-columns:${columns}">
 
-                        ${timelineCells}
-
+                        ${Array.from({ length: columns }, () => '<span class="gantt-timeline-cell"></span>').join("")}
+                        ${todayLine}
+                        ${todayLabel}
                         <button type="button"
-                                class="gantt-bar ${isCompleted(task) ? "is-completed" : ""}"
-                                style="left:calc(${(columnIndex / columns) * 100}% + 2px);width:calc(${Math.max(0.8, 100 / columns)}% - 4px)"
+                                class="gantt-bar ${completed ? "is-completed" : ""}"
+                                style="--gantt-bar-left:${leftPercent}%;--gantt-bar-width:${widthPercent}%;--gantt-progress:${progress}%"
                                 data-task-id="${escapeHTML(task.task_id)}"
-                                title="Deadline: ${formatDate(deadline)}">
-
-                            ${state.ganttScale === "day"
-                                ? escapeHTML(String(deadline.getDate()).padStart(2, "0"))
-                                : "Deadline"}
-
+                                title="${escapeHTML(title)}"
+                                aria-label="${escapeHTML(title)}">
+                            <span class="gantt-bar-label">${progress}%</span>
+                            ${completed ? '<i data-lucide="check" aria-hidden="true"></i>' : ""}
                         </button>
+                        <span class="gantt-deadline-diamond" style="left:calc(${((endIndex + 1) / columns) * 100}% - 5px);" aria-hidden="true"></span>
 
                     </div>
 
@@ -897,11 +1047,14 @@
                     <span>Deadline</span>
                 </div>
 
-                <div class="gantt-timeline-header"
-                     style="--gantt-columns:${columns}">
-
-                    ${headerCells}
-
+                <div class="gantt-timeline-area">
+                    <div class="gantt-period-heading">${escapeHTML(formatMonth(monthStart))}</div>
+                    <div class="gantt-timeline-header"
+                         data-scale="${state.ganttScale}"
+                         style="--gantt-columns:${columns}">
+                        ${headerCells}
+                        ${todayHeaderLine}
+                    </div>
                 </div>
 
             </div>
@@ -920,6 +1073,7 @@
         if (elements.ganttScroll) {
             requestAnimationFrame(() => {
                 elements.ganttScroll.scrollLeft = 0;
+                updateGanttTodayLabelVisibility();
             });
         }
 
@@ -1143,6 +1297,34 @@
     ============================== */
 
     function setupEvents() {
+        let isTodayLabelUpdateScheduled = false;
+        elements.ganttScroll?.addEventListener("scroll", () => {
+            if (isTodayLabelUpdateScheduled) return;
+            isTodayLabelUpdateScheduled = true;
+            requestAnimationFrame(() => {
+                isTodayLabelUpdateScheduled = false;
+                updateGanttTodayLabelVisibility();
+            });
+        }, { passive: true });
+
+        elements.periodFilter?.addEventListener("change", event => {
+            state.period = event.target.value || "all";
+            syncPeriodControls();
+            renderAll();
+        });
+        elements.dateFrom?.addEventListener("change", event => {
+            state.customDateFrom = event.target.value;
+            renderAll();
+        });
+        elements.dateTo?.addEventListener("change", event => {
+            state.customDateTo = event.target.value;
+            renderAll();
+        });
+        elements.eventFilter?.addEventListener("change", event => {
+            state.eventId = event.target.value;
+            renderAll();
+        });
+
         elements.todayBtn?.addEventListener("click", goToToday);
         elements.datePicker?.addEventListener("change", event => {
             const date = parseDate(event.target.value);
@@ -1304,11 +1486,14 @@
         elements.openFullTaskBtn?.addEventListener("click", () => {
             if (!state.selectedTaskId) return;
 
-            // Chưa có route trang task-detail được cung cấp.
-            alert(
-                `Mã công việc: ${state.selectedTaskId}\n` +
-                "Chưa cấu hình đường dẫn trang chi tiết công việc."
-            );
+            const task = findTask(state.selectedTaskId);
+            const event = task ? getTaskEvent(task) : null;
+            const isArchived = !!task &&
+                (isCompleted(task) || event?.is_completed === true);
+            const destination = isArchived ? "history.html" : "task-list.html";
+            const taskUrl = new URL(destination, window.location.href);
+            taskUrl.searchParams.set("taskId", state.selectedTaskId);
+            window.location.assign(taskUrl.href);
         });
     }
 
@@ -1442,7 +1627,8 @@
                         events (
                             event_label,
                             event_category,
-                            category_note
+                            category_note,
+                            is_completed
                         )
                     `)
                     .order(
@@ -1477,6 +1663,8 @@
 
             state.tasks = tasksResult.data || [];
             state.assignments = assignmentsResult.data || [];
+            populateEventFilter();
+            syncPeriodControls();
 
             await resolveCurrentMember();
 
