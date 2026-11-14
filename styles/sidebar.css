@@ -106,14 +106,11 @@
 .workspace-name {
     padding: 0 9px;
     margin: 0 0 35px;
-
+    color: #777777;
     font-size: 10px;
     font-weight: 500;
     letter-spacing: 0.1px;
-
-    color: #777777;
     white-space: nowrap;
-
     flex-shrink: 0;
 }
 
@@ -520,6 +517,99 @@
     margin-top: 5px;
     border-radius: 50%;
     background: #5266D5;
+}
+
+.notification-detail-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 2100;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: rgba(15, 20, 35, .45);
+}
+
+.notification-detail-backdrop[hidden] {
+    display: none;
+}
+
+.notification-detail-dialog {
+    width: min(440px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 18px;
+    border: 1px solid #E7E9F0;
+    border-radius: 12px;
+    background: #fff;
+    color: #252B45;
+    box-shadow: 0 16px 48px rgba(24, 32, 54, .24);
+}
+
+.notification-detail-dialog header,
+.notification-detail-dialog footer,
+.notification-detail-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.notification-detail-dialog header h2 {
+    margin: 0;
+    font-size: 15px;
+}
+
+.notification-detail-dialog header button {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.notification-detail-dialog > p {
+    margin: 16px 0;
+    color: #4B556B;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.notification-detail-meta {
+    justify-content: flex-start;
+    color: #78819D;
+    font-size: 11px;
+}
+
+.notification-detail-dialog footer {
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.notification-detail-dialog footer button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid #E0E3ED;
+    border-radius: 7px;
+    background: #fff;
+    color: #5266D5;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.notification-detail-dialog footer .notification-detail-task-button {
+    border-color: #5266D5;
+    background: #5266D5;
+    color: #fff;
+}
+
+.notification-detail-dialog button:focus-visible {
+    outline: 3px solid rgba(82, 102, 213, .3);
+    outline-offset: 2px;
 }
 
 .notification-toast {

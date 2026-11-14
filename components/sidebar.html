@@ -9,10 +9,7 @@
         <span>AECPT</span>
     </div>
 
-    <!-- Tên không gian làm việc -->
-    <p class="workspace-name">
-        KHÔNG GIAN MULTIMEDIA
-    </p>
+    <p class="workspace-name" id="sidebarWorkspaceName">Không gian cá nhân</p>
 
     <!-- Menu điều hướng -->
     <nav class="sidebar-menu">
@@ -90,6 +87,27 @@
         <p class="notification-list-empty">Đang tải thông báo...</p>
     </div>
 </section>
+
+<div class="notification-detail-backdrop" id="notificationDetailModal" hidden>
+    <section class="notification-detail-dialog" role="dialog" aria-modal="true"
+             aria-labelledby="notificationDetailTitle">
+        <header>
+            <h2 id="notificationDetailTitle"></h2>
+            <button type="button" id="closeNotificationDetail" aria-label="Đóng">×</button>
+        </header>
+        <p id="notificationDetailMessage"></p>
+        <div class="notification-detail-meta">
+            <span id="notificationDetailPriority"></span>
+            <time id="notificationDetailDate"></time>
+        </div>
+        <footer>
+            <button type="button" class="notification-detail-close-button"
+                    id="dismissNotificationDetail">Đóng</button>
+            <button type="button" class="notification-detail-task-button"
+                    id="openNotificationTask" hidden>Mở công việc</button>
+        </footer>
+    </section>
+</div>
 
 <div class="ace-chatbot-widget" id="aceChatbotWidget">
     <section class="ace-chatbot-panel" id="aceChatbotPanel"

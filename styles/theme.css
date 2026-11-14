@@ -155,12 +155,33 @@ html[data-theme="dark"] .ace-chatbot-header {
 }
 
 html[data-theme="dark"] .notification-panel,
+html[data-theme="dark"] .notification-detail-dialog,
 html[data-theme="dark"] .ace-chatbot-panel,
 html[data-theme="dark"] .ace-chatbot-history,
 html[data-theme="dark"] .ace-chatbot-messages {
     background-color: var(--surface);
     color: var(--text-primary);
     border-color: var(--border);
+}
+
+html[data-theme="dark"] .notification-detail-dialog > p {
+    color: var(--text-secondary);
+}
+
+html[data-theme="dark"] .notification-detail-meta {
+    color: var(--text-muted);
+}
+
+html[data-theme="dark"] .notification-detail-dialog footer button {
+    background-color: var(--surface-secondary);
+    color: var(--text-primary);
+    border-color: var(--border);
+}
+
+html[data-theme="dark"] .notification-detail-dialog footer .notification-detail-task-button {
+    background-color: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
 }
 
 html[data-theme="dark"] .setting-button,

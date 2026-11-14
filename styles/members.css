@@ -1683,3 +1683,23 @@ button {
     }
 
 }
+
+.modal-actions button:disabled {
+    cursor: wait;
+    opacity: .6;
+}
+
+.workspace-invitation-feedback {
+    min-height: 16px;
+    margin: 8px 0;
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+.workspace-invitation-feedback.is-error {
+    color: #B42318;
+}
+
+.workspace-invitation-feedback.is-success {
+    color: #067647;
+}

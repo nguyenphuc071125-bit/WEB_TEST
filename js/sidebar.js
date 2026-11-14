@@ -8,27 +8,6 @@ function getUserInitials(name = "") {
         .toUpperCase();
 }
 
-function appNotificationStorageKey(userId) {
-    return `mediatask_notifications_v1:${userId}`;
-}
-
-function readAppNotifications(userId) {
-    const saved = localStorage.getItem(appNotificationStorageKey(userId));
-    if (!saved) return [];
-    const notifications = JSON.parse(saved);
-    if (!Array.isArray(notifications)) {
-        throw new Error("Dữ liệu thông báo trong trình duyệt không hợp lệ.");
-    }
-    return notifications;
-}
-
-function writeAppNotifications(userId, notifications) {
-    localStorage.setItem(
-        appNotificationStorageKey(userId),
-        JSON.stringify(notifications.slice(0, 100))
-    );
-}
-
 function isAssignmentComplete(assignment) {
     if (assignment.is_done === true) return true;
     return ["complete", "completed", "done"].includes(
@@ -101,22 +80,16 @@ function formatNotificationDeadline(task) {
     }).format(date);
 }
 
-function renderAppNotificationCenter(userId, container, loadError = "") {
+function renderAppNotificationCenter(notifications, container, loadError = "") {
     const bell = container.querySelector("#notificationBellButton");
     const badge = container.querySelector("#notificationUnreadCount");
     const panel = container.querySelector("#notificationPanel");
     const list = container.querySelector("#notificationList");
+    const markAllButton = container.querySelector("#markAllNotificationsRead");
     if (!bell || !badge || !panel || !list) return [];
 
-    let notifications = [];
-    try {
-        notifications = readAppNotifications(userId)
-            .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    } catch (error) {
-        console.error("Không thể hiển thị thông báo đã lưu:", error);
-        loadError = "Không thể đọc thông báo trong trình duyệt.";
-    }
-    const unreadCount = notifications.filter(notification => !notification.read).length;
+    const unreadCount = notifications.filter(notification => !notification.is_read).length;
+    if (markAllButton) markAllButton.disabled = unreadCount === 0;
     badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
     badge.hidden = unreadCount === 0;
     bell.setAttribute("aria-label", unreadCount
@@ -135,16 +108,16 @@ function renderAppNotificationCenter(userId, container, loadError = "") {
     notifications.forEach(notification => {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = `notification-item${notification.read ? "" : " is-unread"}`;
-        button.dataset.notificationId = notification.id;
-        if (notification.taskId) button.dataset.taskId = notification.taskId;
+        button.className = `notification-item${notification.is_read ? "" : " is-unread"}`;
+        button.dataset.notificationId = notification.notification_id;
+        if (notification.task_id) button.dataset.taskId = notification.task_id;
 
         const icon = document.createElement("span");
         icon.className = "notification-item-icon";
         const iconElement = document.createElement("i");
-        iconElement.setAttribute("data-lucide", notification.type === "overdue"
+        iconElement.setAttribute("data-lucide", notification.type === "deadline_overdue"
             ? "triangle-alert"
-            : notification.type === "new_task"
+            : notification.type === "task_assigned"
                 ? "clipboard-check"
                 : "calendar-clock");
         icon.appendChild(iconElement);
@@ -161,12 +134,12 @@ function renderAppNotificationCenter(userId, container, loadError = "") {
             month: "2-digit",
             hour: "2-digit",
             minute: "2-digit"
-        }).format(new Date(notification.createdAt));
+        }).format(new Date(notification.created_at));
         content.append(title, message, date);
         button.appendChild(icon);
         button.appendChild(content);
 
-        if (!notification.read) {
+        if (!notification.is_read) {
             const dot = document.createElement("span");
             dot.className = "notification-item-unread-dot";
             dot.setAttribute("aria-label", "Chưa đọc");
@@ -230,182 +203,282 @@ async function initializeAppNotificationCenter(user, container) {
     const panel = container.querySelector("#notificationPanel");
     const list = container.querySelector("#notificationList");
     const markAllButton = container.querySelector("#markAllNotificationsRead");
+    const detailModal = container.querySelector("#notificationDetailModal");
+    const detailTitle = container.querySelector("#notificationDetailTitle");
+    const detailMessage = container.querySelector("#notificationDetailMessage");
+    const detailPriority = container.querySelector("#notificationDetailPriority");
+    const detailDate = container.querySelector("#notificationDetailDate");
+    const openTaskButton = container.querySelector("#openNotificationTask");
     if (!bell || !panel || !list || !markAllButton) return;
 
+    const client = window.supabaseClient;
     const userId = user.id;
+    let notifications = [];
+    let loadError = "";
+    const loadNotifications = async () => {
+        const { data, error } = await client
+            .from("notifications")
+            .select("notification_id, task_id, title, message, type, priority, is_read, created_at, dedupe_key")
+            .eq("user_id", userId)
+            .order("created_at", { ascending: false })
+            .limit(100);
+        if (error) throw error;
+        notifications = data || [];
+        return notifications;
+    };
     const openPanel = () => {
         panel.hidden = false;
         bell.setAttribute("aria-expanded", "true");
-        renderAppNotificationCenter(userId, container);
+        renderAppNotificationCenter(notifications, container, loadError);
     };
     const closePanel = () => {
         panel.hidden = true;
         bell.setAttribute("aria-expanded", "false");
+    };
+    const closeDetail = () => {
+        if (detailModal) detailModal.hidden = true;
+    };
+    const openDetail = notification => {
+        if (!detailModal || !detailTitle || !detailMessage || !detailPriority || !detailDate) return;
+        detailTitle.textContent = notification.title || "Thông báo";
+        detailMessage.textContent = notification.message || "";
+        detailPriority.textContent = `Mức độ: ${
+            { low: "Thấp", normal: "Bình thường", high: "Cao", urgent: "Khẩn cấp" }[
+                notification.priority
+            ] || "Bình thường"
+        }`;
+        detailDate.textContent = new Intl.DateTimeFormat(
+            window.AppI18n?.locale || "vi-VN",
+            { dateStyle: "medium", timeStyle: "short" }
+        ).format(new Date(notification.created_at));
+        if (openTaskButton) {
+            openTaskButton.hidden = !notification.task_id;
+            openTaskButton.dataset.taskId = notification.task_id || "";
+        }
+        detailModal.hidden = false;
+        container.querySelector("#closeNotificationDetail")?.focus();
     };
 
     bell.addEventListener("click", () => {
         if (panel.hidden) openPanel();
         else closePanel();
     });
-    markAllButton.addEventListener("click", () => {
+    markAllButton.addEventListener("click", async () => {
+        markAllButton.disabled = true;
         try {
-            const notifications = readAppNotifications(userId);
-            notifications.forEach(notification => { notification.read = true; });
-            writeAppNotifications(userId, notifications);
-            renderAppNotificationCenter(userId, container);
+            const hadUnread = notifications.some(notification => !notification.is_read);
+            const { error } = await client
+                .from("notifications")
+                .update({ is_read: true, read_at: new Date().toISOString() })
+                .eq("user_id", userId)
+                .eq("is_read", false);
+            if (error) throw error;
+            await loadNotifications();
+            if (hadUnread && notifications.some(notification => !notification.is_read)) {
+                throw new Error("Một số thông báo vẫn chưa được đánh dấu. Kiểm tra quyền RLS.");
+            }
+            loadError = "";
+            renderAppNotificationCenter(notifications, container);
         } catch (error) {
             console.error("Không thể cập nhật trạng thái thông báo:", error);
+            loadError = "Không thể lưu trạng thái đã đọc. Kiểm tra quyền UPDATE của RLS.";
+            renderAppNotificationCenter(notifications, container, loadError);
+        } finally {
+            markAllButton.disabled = !notifications.some(notification => !notification.is_read);
         }
     });
-    list.addEventListener("click", event => {
+    list.addEventListener("click", async event => {
+        if (!(event.target instanceof Element)) return;
         const item = event.target.closest("[data-notification-id]");
         if (!item) return;
+        let notification = notifications.find(value =>
+            value.notification_id === item.dataset.notificationId
+        );
+        if (!notification) return;
         try {
-            const notifications = readAppNotifications(userId);
-            const notification = notifications.find(value => value.id === item.dataset.notificationId);
-            if (notification) {
-                notification.read = true;
-                writeAppNotifications(userId, notifications);
+            if (!notification.is_read) {
+                const { error } = await client
+                    .from("notifications")
+                    .update({ is_read: true, read_at: new Date().toISOString() })
+                    .eq("notification_id", notification.notification_id)
+                    .eq("user_id", userId);
+                if (error) throw error;
+                await loadNotifications();
+                const refreshedNotification = notifications.find(value =>
+                    value.notification_id === item.dataset.notificationId
+                );
+                if (!refreshedNotification?.is_read) {
+                    throw new Error("Thông báo chưa được đánh dấu đã đọc. Kiểm tra quyền RLS.");
+                }
+                notification = refreshedNotification;
             }
-            renderAppNotificationCenter(userId, container);
-            if (item.dataset.taskId) {
-                const target = new URL("my-tasks.html", window.location.href);
-                target.searchParams.set("taskId", item.dataset.taskId);
-                window.location.href = target.href;
-            }
+            loadError = "";
+            renderAppNotificationCenter(notifications, container, loadError);
         } catch (error) {
             console.error("Không thể mở thông báo:", error);
+            loadError = "Không thể lưu trạng thái đã đọc. Kiểm tra quyền UPDATE của RLS.";
+            renderAppNotificationCenter(notifications, container, loadError);
         }
+        openDetail(notification);
+    });
+    container.querySelector("#closeNotificationDetail")?.addEventListener("click", closeDetail);
+    container.querySelector("#dismissNotificationDetail")?.addEventListener("click", closeDetail);
+    detailModal?.addEventListener("click", event => {
+        if (event.target === detailModal) closeDetail();
+    });
+    openTaskButton?.addEventListener("click", () => {
+        const taskId = openTaskButton.dataset.taskId;
+        if (!taskId) return;
+        const target = new URL("task-list.html", window.location.href);
+        target.searchParams.set("taskId", taskId);
+        window.location.href = target.href;
     });
     document.addEventListener("click", event => {
         if (!container.contains(event.target) && !panel.contains(event.target)) closePanel();
     });
     document.addEventListener("keydown", event => {
-        if (event.key === "Escape") closePanel();
+        if (event.key === "Escape") {
+            if (detailModal && !detailModal.hidden) closeDetail();
+            else closePanel();
+        }
     });
 
-    let storedNotifications = [];
-    let loadError = "";
-    try {
-        storedNotifications = readAppNotifications(userId);
-    } catch (error) {
-        console.error("Không thể đọc thông báo đã lưu:", error);
-        loadError = "Không thể đọc thông báo trong trình duyệt.";
-    }
-
-    if (!window.supabaseClient?.from || !user.memberId) {
-        loadError = user.memberId
-            ? "Không tìm thấy kết nối Supabase."
-            : "Tài khoản chưa được liên kết với thành viên.";
-        renderAppNotificationCenter(userId, container, loadError);
+    if (!client?.from) {
+        loadError = "Không tìm thấy kết nối Supabase.";
+        renderAppNotificationCenter(notifications, container, loadError);
         return;
     }
 
     try {
-        const { data: assignments, error: assignmentError } = await window.supabaseClient
-            .from("task_assignments")
-            .select("task_id, member_id, assignment_state, is_done")
-            .eq("member_id", user.memberId);
-        if (assignmentError) throw assignmentError;
+        await loadNotifications();
+        const generated = [];
+        let activeTaskIds = [];
+        if (user.memberId) {
+            const { data: assignments, error: assignmentError } = await client
+                .from("task_assignments")
+                .select("task_id, member_id, assignment_state, is_done")
+                .eq("member_id", user.memberId);
+            if (assignmentError) throw assignmentError;
 
-        const taskIds = [...new Set((assignments || []).map(item => String(item.task_id)))];
-        let tasks = [];
-        let activeEventIds = new Set();
-        if (taskIds.length) {
-            const tasksResult = await window.supabaseClient.from("tasks").select(`
-                    task_id, event_id, task_title, package_deadline_date,
-                    package_deadline_time, package_deadline_at, is_cancelled, submission_label
-                `).in("task_id", taskIds);
-            if (tasksResult.error) throw tasksResult.error;
-            const eventIds = [...new Set((tasksResult.data || [])
-                .map(task => task.event_id)
-                .filter(eventId => eventId != null)
-                .map(String))];
-            const eventsResult = eventIds.length
-                ? await window.supabaseClient.from("events")
-                    .select("event_id, is_completed")
-                    .in("event_id", eventIds)
-                : { data: [], error: null };
-            if (eventsResult.error) throw eventsResult.error;
-            activeEventIds = new Set((eventsResult.data || [])
-                .filter(event => event.is_completed !== true)
-                .map(event => String(event.event_id)));
-            tasks = (tasksResult.data || []).filter(task =>
-                task.event_id != null &&
-                activeEventIds.has(String(task.event_id)) &&
-                task.is_cancelled !== true
-            );
+            const taskIds = [...new Set((assignments || []).map(item => String(item.task_id)))];
+            let tasks = [];
+            if (taskIds.length) {
+                const tasksResult = await client.from("tasks").select(`
+                        task_id, event_id, task_title, package_deadline_date,
+                        package_deadline_time, package_deadline_at, is_cancelled, submission_label
+                    `).in("task_id", taskIds);
+                if (tasksResult.error) throw tasksResult.error;
+                const eventIds = [...new Set((tasksResult.data || [])
+                    .map(task => task.event_id)
+                    .filter(eventId => eventId != null)
+                    .map(String))];
+                const eventsResult = eventIds.length
+                    ? await client.from("events")
+                        .select("event_id, is_completed")
+                        .in("event_id", eventIds)
+                    : { data: [], error: null };
+                if (eventsResult.error) throw eventsResult.error;
+                const activeEventIds = new Set((eventsResult.data || [])
+                    .filter(event => event.is_completed !== true)
+                    .map(event => String(event.event_id)));
+                tasks = (tasksResult.data || []).filter(task =>
+                    task.event_id != null &&
+                    activeEventIds.has(String(task.event_id)) &&
+                    task.is_cancelled !== true
+                );
+            }
+
+            const assignmentsByTask = new Map();
+            (assignments || []).forEach(assignment => {
+                const taskKey = String(assignment.task_id);
+                const taskAssignments = assignmentsByTask.get(taskKey) || [];
+                taskAssignments.push(assignment);
+                assignmentsByTask.set(taskKey, taskAssignments);
+            });
+
+            const snapshotKey = `mediatask_assignment_snapshot_v1:${userId}`;
+            const previousSnapshot = localStorage.getItem(snapshotKey);
+            const previousTaskIds = previousSnapshot === null
+                ? null
+                : new Set(JSON.parse(previousSnapshot).map(String));
+            activeTaskIds = tasks.map(task => String(task.task_id));
+
+            tasks.forEach(task => {
+                const taskId = String(task.task_id);
+                const ownAssignments = assignmentsByTask.get(taskId) || [];
+                const isIncomplete = ownAssignments.some(assignment => !isAssignmentComplete(assignment));
+                const title = task.task_title || task.submission_label || task.task_id;
+                const deadlineKey = task.package_deadline_at ||
+                    `${task.package_deadline_date || ""}T${task.package_deadline_time || ""}`;
+
+                if (previousTaskIds && !previousTaskIds.has(taskId) && isIncomplete) {
+                    generated.push({
+                        task_id: taskId,
+                        type: "task_assigned",
+                        title: "Bạn vừa được giao công việc",
+                        message: title,
+                        dedupe_key: `task_assigned:${taskId}`
+                    });
+                }
+
+                if (!isIncomplete) return;
+                const deadlineState = getTaskDeadlineState(task);
+                if (!deadlineState) return;
+
+                const type = deadlineState.type === "overdue"
+                    ? "deadline_overdue"
+                    : "deadline_reminder";
+                const message = deadlineState.type === "overdue"
+                    ? `${title} đã quá hạn (${formatNotificationDeadline(task)}).`
+                    : `${title} sắp đến hạn (${formatNotificationDeadline(task)}).`;
+                generated.push({
+                    task_id: taskId,
+                    type,
+                    title: deadlineState.type === "overdue" ? "Công việc quá hạn" : "Deadline sắp đến",
+                    message,
+                    dedupe_key: `${type}:${taskId}:${deadlineKey}`
+                });
+            });
+        } else {
+            loadError = "Tài khoản chưa được liên kết với thành viên.";
         }
 
-        const assignmentsByTask = new Map();
-        (assignments || []).forEach(assignment => {
-            const taskKey = String(assignment.task_id);
-            const taskAssignments = assignmentsByTask.get(taskKey) || [];
-            taskAssignments.push(assignment);
-            assignmentsByTask.set(taskKey, taskAssignments);
-        });
-
-        const snapshotKey = `mediatask_assignment_snapshot_v1:${userId}`;
-        const previousSnapshot = localStorage.getItem(snapshotKey);
-        const previousTaskIds = previousSnapshot === null
-            ? null
-            : new Set(JSON.parse(previousSnapshot).map(String));
-        const activeTaskIds = tasks.map(task => String(task.task_id));
-        const notifications = readAppNotifications(userId);
-        const notificationIds = new Set(notifications.map(notification => notification.id));
-        const generated = [];
-
-        tasks.forEach(task => {
-            const taskId = String(task.task_id);
-            const ownAssignments = assignmentsByTask.get(taskId) || [];
-            const isIncomplete = ownAssignments.some(assignment => !isAssignmentComplete(assignment));
-            const title = task.task_title || task.submission_label || task.task_id;
-            const deadlineKey = task.package_deadline_at ||
-                `${task.package_deadline_date || ""}T${task.package_deadline_time || ""}`;
-
-            if (previousTaskIds && !previousTaskIds.has(taskId) && isIncomplete) {
-                generated.push({
-                    id: `new_task:${taskId}`,
-                    type: "new_task",
-                    taskId,
-                    title: "Bạn vừa được giao công việc",
-                    message: title,
-                    createdAt: new Date().toISOString(),
-                    read: false
-                });
+        const generatedKeys = [...new Set(generated.map(item => item.dedupe_key))];
+        let existingKeys = new Set();
+        if (generatedKeys.length) {
+            const { data, error } = await client
+                .from("notifications")
+                .select("dedupe_key")
+                .eq("user_id", userId)
+                .in("dedupe_key", generatedKeys);
+            if (error) throw error;
+            existingKeys = new Set((data || []).map(item => item.dedupe_key));
+            const newNotifications = generated
+                .filter(item => !existingKeys.has(item.dedupe_key))
+                .map(item => ({
+                    ...item,
+                    user_id: userId,
+                    member_id: user.memberId,
+                    priority: "normal"
+                }));
+            if (newNotifications.length) {
+                const { error: insertError } = await client
+                    .from("notifications")
+                    .insert(newNotifications);
+                if (insertError) throw insertError;
             }
+        }
 
-            if (!isIncomplete) return;
-            const deadlineState = getTaskDeadlineState(task);
-            if (!deadlineState) return;
-
-            const type = deadlineState.type;
-            const message = type === "overdue"
-                ? `${title} đã quá hạn (${formatNotificationDeadline(task)}).`
-                : `${title} sắp đến hạn (${formatNotificationDeadline(task)}).`;
-            generated.push({
-                id: `${type}:${taskId}:${deadlineKey}`,
-                type,
-                taskId,
-                title: type === "overdue" ? "Công việc quá hạn" : "Deadline sắp đến",
-                message,
-                createdAt: new Date().toISOString(),
-                read: false
-            });
-        });
-
-        localStorage.setItem(snapshotKey, JSON.stringify(activeTaskIds));
-        generated.forEach(notification => {
-            if (!notificationIds.has(notification.id)) {
-                notifications.unshift(notification);
-                notificationIds.add(notification.id);
-            }
-        });
-        writeAppNotifications(userId, notifications);
-        const currentNotifications = renderAppNotificationCenter(userId, container);
+        if (user.memberId) {
+            localStorage.setItem(
+                `mediatask_assignment_snapshot_v1:${userId}`,
+                JSON.stringify(activeTaskIds)
+            );
+        }
+        await loadNotifications();
+        renderAppNotificationCenter(notifications, container, loadError);
         const newlyCreated = generated.filter(notification =>
-            notificationIds.has(notification.id) &&
-            !storedNotifications.some(stored => stored.id === notification.id)
+            !existingKeys.has(notification.dedupe_key)
         );
         const popupSessionKey = `mediatask_notification_popup_v1:${userId}`;
         let popupShown = false;
@@ -414,23 +487,22 @@ async function initializeAppNotificationCenter(user, container) {
         } catch (error) {
             console.error("Không thể đọc trạng thái popup thông báo:", error);
         }
-        const unreadNotifications = currentNotifications.filter(notification => !notification.read);
+        const unreadNotifications = notifications.filter(notification => !notification.is_read);
         if (unreadNotifications.length && (newlyCreated.length || !popupShown)) {
             try {
                 sessionStorage.setItem(popupSessionKey, "shown");
             } catch (error) {
                 console.error("Không thể lưu trạng thái popup thông báo:", error);
             }
-            showAppNotificationToast(
-                newlyCreated[0] || unreadNotifications[0],
-                unreadNotifications.length,
-                openPanel
-            );
+            const firstUnread = newlyCreated.length
+                ? notifications.find(item => item.dedupe_key === newlyCreated[0].dedupe_key)
+                : unreadNotifications[0];
+            showAppNotificationToast(firstUnread, unreadNotifications.length, openPanel);
         }
     } catch (error) {
         console.error("Không thể tải thông báo:", error);
         loadError = "Không thể tải thông báo. Hãy thử tải lại trang.";
-        renderAppNotificationCenter(userId, container, loadError);
+        renderAppNotificationCenter(notifications, container, loadError);
     }
 }
 
@@ -697,6 +769,80 @@ window.loadAppUser = async function () {
     return userInfo;
 };
 
+const personalWorkspaceRequests = new Map();
+window.ensurePersonalWorkspace = function (user) {
+    if (!user?.id || !window.supabaseClient?.from) {
+        return Promise.reject(new Error("Không thể xác định tài khoản để tải workspace."));
+    }
+
+    const cachedRequest = personalWorkspaceRequests.get(user.id);
+    if (cachedRequest) return cachedRequest;
+
+    const request = (async () => {
+        const client = window.supabaseClient;
+        if (user.email) {
+            const { data: acceptedInvitations, error: invitationError } = await client
+                .from("workspace_invitations")
+                .select("workspace_id")
+                .ilike("email", user.email)
+                .eq("status", "accepted")
+                .order("responded_at", { ascending: false })
+                .limit(1);
+            if (invitationError) throw invitationError;
+
+            if (acceptedInvitations?.length) {
+                const { data: invitedWorkspace, error: invitedWorkspaceError } = await client
+                    .from("workspaces")
+                    .select("workspace_id, workspace_name, created_by, created_at")
+                    .eq("workspace_id", acceptedInvitations[0].workspace_id)
+                    .maybeSingle();
+                if (invitedWorkspaceError) throw invitedWorkspaceError;
+                if (!invitedWorkspace) {
+                    throw new Error("Không tìm thấy workspace của lời mời đã chấp nhận.");
+                }
+                window.personalWorkspace = invitedWorkspace;
+                return invitedWorkspace;
+            }
+        }
+
+        const { data: existingWorkspaces, error: workspaceError } = await client
+            .from("workspaces")
+            .select("workspace_id, workspace_name, created_by, created_at")
+            .eq("created_by", user.id)
+            .order("created_at", { ascending: true })
+            .limit(1);
+        if (workspaceError) throw workspaceError;
+
+        if (existingWorkspaces?.length) {
+            window.personalWorkspace = existingWorkspaces[0];
+            return existingWorkspaces[0];
+        }
+
+        const ownerName = user.name || user.email?.split("@")[0] || "của tôi";
+        const { data: createdWorkspace, error: createError } = await client
+            .from("workspaces")
+            .insert({
+                workspace_name: `Workspace của ${ownerName}`.slice(0, 100),
+                created_by: user.id
+            })
+            .select("workspace_id, workspace_name, created_by, created_at")
+            .single();
+        if (createError) throw createError;
+        if (!createdWorkspace?.workspace_id) {
+            throw new Error("Database chưa trả về workspace cá nhân vừa tạo.");
+        }
+
+        window.personalWorkspace = createdWorkspace;
+        return createdWorkspace;
+    })();
+
+    personalWorkspaceRequests.set(user.id, request);
+    return request.catch(error => {
+        personalWorkspaceRequests.delete(user.id);
+        throw error;
+    });
+};
+
 document.addEventListener("DOMContentLoaded", async () => {
     const container = document.getElementById("sidebar-container");
     if (!container) return;
@@ -725,6 +871,14 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (user) {
             initializeAceChatbot(container, user);
             window.renderAppUser(user);
+            const workspaceLabel = container.querySelector("#sidebarWorkspaceName");
+            try {
+                const workspace = await window.ensurePersonalWorkspace(user);
+                if (workspaceLabel) workspaceLabel.textContent = workspace.workspace_name;
+            } catch (workspaceError) {
+                console.error("Không thể tải workspace cá nhân:", workspaceError);
+                if (workspaceLabel) workspaceLabel.textContent = `Workspace của ${user.name}`;
+            }
             await initializeAppNotificationCenter(user, container);
         }
 

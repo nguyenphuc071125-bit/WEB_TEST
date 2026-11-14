@@ -10,22 +10,6 @@
    1. API CONFIGURATION
 ===================================================== */
 
-// Khi có backend, cấu hình API tại đây.
-// Ví dụ: http://localhost:3000/api
-
-const API_CONFIG = {
-    baseURL: "",
-
-    endpoints: {
-        members: "/api/members",
-        detail: (id) => `/api/members/${id}`,
-        update: (id) => `/api/members/${id}`,
-        skills: (id) => `/api/members/${id}/skills`,
-        availability: (id) => `/api/members/${id}/availability`
-    }
-};
-
-
 // Dữ liệu lấy từ API, không khởi tạo dữ liệu mẫu.
 let members = [];
 
@@ -33,6 +17,10 @@ let currentFilter = "all";
 let currentMemberId = null;
 let currentAccountMemberId = null;
 let currentAccountIsTeamLeader = false;
+let currentWorkspace = null;
+let currentUserCanManageWorkspace = false;
+let currentWorkspaceMemberIds = new Set();
+let currentUser = null;
 let searchKeyword = "";
 let isLoading = false;
 let availabilityByDay = {};
@@ -69,6 +57,12 @@ const DOM = {
 
     addForm: document.getElementById("addMemberForm"),
 
+    outgoingInvitations: document.getElementById("outgoingWorkspaceInvitations"),
+
+    incomingInvitations: document.getElementById("incomingWorkspaceInvitations"),
+
+    invitationFeedback: document.getElementById("workspaceInvitationFeedback"),
+
     updateForm: document.getElementById("updateMemberForm"),
 
     detailPanel: document.getElementById("memberDetailPanel"),
@@ -84,38 +78,6 @@ if (DOM.openAddButton) {
 
 
 /* =====================================================
-   3. API SERVICE
-===================================================== */
-
-async function apiRequest(endpoint, options = {}) {
-
-    const response = await fetch(
-        API_CONFIG.baseURL + endpoint,
-        {
-            ...options,
-
-            headers: {
-                "Content-Type": "application/json",
-                ...options.headers
-            }
-        }
-    );
-
-    if (!response.ok) {
-        throw new Error(
-            `API Error: ${response.status}`
-        );
-    }
-
-    if (response.status === 204) {
-        return null;
-    }
-
-    return response.json();
-}
-
-
-/* =====================================================
    4. LOAD MEMBERS FROM DATABASE
 ===================================================== */
 
@@ -127,6 +89,7 @@ async function loadMembers() {
             await window.supabaseClient.auth.getSession();
         if (sessionError) throw sessionError;
         const user = sessionData.session?.user || null;
+        currentUser = user;
 
         const [membersResult, availabilityResult, accountRolesResult] = await Promise.all([
             window.supabaseClient
@@ -168,9 +131,6 @@ async function loadMembers() {
         currentAccountIsTeamLeader = isTeamLeaderRole(
             ownMembership?.account_role || user?.app_metadata?.role
         );
-        if (DOM.openAddButton) {
-            DOM.openAddButton.hidden = !currentAccountIsTeamLeader;
-        }
 
         const availabilityByMember = new Map();
         (availabilityResult.data || []).forEach(row => {
@@ -209,11 +169,168 @@ async function loadMembers() {
             };
         });
 
+        await loadWorkspaceInvitations(user);
+        currentWorkspaceMemberIds = new Set([
+            ...currentWorkspaceMemberIds,
+            ...(currentAccountMemberId ? [String(currentAccountMemberId)] : [])
+        ]);
+        members = members.filter(member =>
+            currentWorkspaceMemberIds.has(String(member.id))
+        );
         renderMembers();
         updateMemberCounts();
     } catch (error) {
         console.error("Không thể tải danh sách thành viên:", error);
         showError("Không thể tải danh sách thành viên.");
+    }
+}
+
+function invitationStatusLabel(status) {
+    return {
+        pending: "Đang chờ",
+        accepted: "Đã chấp nhận",
+        cancelled: "Đã hủy",
+        declined: "Đã từ chối"
+    }[status] || status;
+}
+
+function renderWorkspaceInvitations(container, invitations, direction) {
+    if (!container) return;
+    container.replaceChildren();
+
+    if (!invitations.length) {
+        const emptyMessage = document.createElement("p");
+        emptyMessage.className = "workspace-invitations-empty";
+        emptyMessage.textContent = "Chưa có lời mời.";
+        container.appendChild(emptyMessage);
+        return;
+    }
+
+    invitations.forEach(invitation => {
+        const item = document.createElement("article");
+        item.className = "workspace-invitation-item";
+
+        const details = document.createElement("div");
+        details.className = "workspace-invitation-details";
+
+        const email = document.createElement("strong");
+        email.textContent = invitation.email;
+        details.appendChild(email);
+
+        const status = document.createElement("span");
+        status.className = `workspace-invitation-status is-${invitation.status}`;
+        status.textContent = invitationStatusLabel(invitation.status);
+        details.appendChild(status);
+
+        const actions = document.createElement("div");
+        actions.className = "workspace-invitation-actions";
+        if (invitation.status === "pending") {
+            const actionNames = direction === "incoming"
+                ? [["accept", "Chấp nhận"], ["decline", "Từ chối"]]
+                : [["cancel", "Hủy lời mời"]];
+            actionNames.forEach(([action, label]) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.dataset.invitationAction = action;
+                button.dataset.invitationId = invitation.invitation_id;
+                button.textContent = label;
+                actions.appendChild(button);
+            });
+        }
+
+        item.append(details, actions);
+        container.appendChild(item);
+    });
+}
+
+async function loadWorkspaceInvitations(user) {
+    const showLoadError = message => {
+        [DOM.outgoingInvitations, DOM.incomingInvitations].forEach(container => {
+            if (!container) return;
+            container.replaceChildren();
+            const errorMessage = document.createElement("p");
+            errorMessage.className = "workspace-invitations-error";
+            errorMessage.textContent = message;
+            container.appendChild(errorMessage);
+        });
+    };
+
+    if (!user?.id) {
+        currentWorkspace = null;
+        if (DOM.openAddButton) DOM.openAddButton.hidden = true;
+        currentWorkspaceMemberIds = new Set();
+        showLoadError("Cần đăng nhập để tải lời mời workspace.");
+        return;
+    }
+
+    try {
+        if (typeof window.ensurePersonalWorkspace !== "function") {
+            throw new Error("Chưa khởi tạo chức năng tải workspace cá nhân.");
+        }
+
+        currentWorkspace = await window.ensurePersonalWorkspace(user);
+        const isWorkspaceOwner = String(currentWorkspace.created_by) === String(user.id);
+
+        const client = window.supabaseClient;
+        const outgoingRequest = isWorkspaceOwner || currentAccountIsTeamLeader
+            ? client
+                .from("workspace_invitations")
+                .select("invitation_id, email, member_id, status, created_at")
+                .eq("workspace_id", currentWorkspace.workspace_id)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null });
+        const incomingRequest = user.email
+            ? client
+                .from("workspace_invitations")
+                .select("invitation_id, workspace_id, email, member_id, status, created_at")
+                .ilike("email", user.email)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [], error: null });
+
+        const [outgoingResult, incomingResult] = await Promise.all([
+            outgoingRequest,
+            incomingRequest
+        ]);
+        if (outgoingResult.error) throw outgoingResult.error;
+        if (incomingResult.error) throw incomingResult.error;
+
+        const hasAcceptedWorkspaceInvitation = (incomingResult.data || []).some(invitation =>
+            invitation.status === "accepted" &&
+            String(invitation.workspace_id) === String(currentWorkspace.workspace_id)
+        );
+        currentUserCanManageWorkspace = currentAccountIsTeamLeader &&
+            (isWorkspaceOwner || hasAcceptedWorkspaceInvitation);
+        currentWorkspaceMemberIds = new Set(
+            [...(outgoingResult.data || []), ...(incomingResult.data || [])]
+                .filter(invitation =>
+                    invitation.status === "accepted" &&
+                    String(invitation.workspace_id || currentWorkspace.workspace_id) ===
+                        String(currentWorkspace.workspace_id) &&
+                    invitation.member_id
+                )
+                .map(invitation => String(invitation.member_id))
+        );
+        if (DOM.openAddButton) {
+            DOM.openAddButton.hidden = !currentUserCanManageWorkspace;
+        }
+
+        renderWorkspaceInvitations(
+            DOM.outgoingInvitations,
+            outgoingResult.data || [],
+            "outgoing"
+        );
+        renderWorkspaceInvitations(
+            DOM.incomingInvitations,
+            incomingResult.data || [],
+            "incoming"
+        );
+    } catch (error) {
+        console.error("Không thể tải lời mời workspace:", error);
+        currentWorkspace = null;
+        currentUserCanManageWorkspace = false;
+        currentWorkspaceMemberIds = new Set();
+        if (DOM.openAddButton) DOM.openAddButton.hidden = true;
+        showLoadError("Không thể tải lời mời. Vui lòng kiểm tra quyền truy cập Supabase.");
     }
 }
 
@@ -787,13 +904,16 @@ if (DOM.closeDetail) {
 ===================================================== */
 
 function openAddMemberModal() {
+    if (
+        !currentUser?.id ||
+        !currentWorkspace ||
+        !currentUserCanManageWorkspace ||
+        !DOM.addModal
+    ) return;
 
-    if (!currentAccountIsTeamLeader || !DOM.addModal) return;
-
+    setInvitationFeedback("");
     DOM.addModal.hidden = false;
-
     refreshIcons();
-
 }
 
 
@@ -802,9 +922,6 @@ function closeAddMemberModal() {
     if (!DOM.addModal) return;
 
     DOM.addModal.hidden = true;
-    const passwordInput = DOM.addForm?.elements.initialPassword;
-    if (passwordInput) passwordInput.value = "";
-
 }
 
 const toggleInitialPasswordButton = document.getElementById("toggleMemberInitialPassword");
@@ -821,7 +938,6 @@ toggleInitialPasswordButton?.addEventListener("click", () => {
     );
 });
 
-
 if (DOM.openAddButton) {
 
     DOM.openAddButton.addEventListener(
@@ -830,6 +946,80 @@ if (DOM.openAddButton) {
     );
 
 }
+
+function setInvitationFeedback(message, kind = "") {
+    if (!DOM.invitationFeedback) return;
+    DOM.invitationFeedback.textContent = message;
+    DOM.invitationFeedback.classList.toggle("is-error", kind === "error");
+    DOM.invitationFeedback.classList.toggle("is-success", kind === "success");
+}
+
+async function handleWorkspaceInvitationAction(event) {
+    const button = event.target.closest("[data-invitation-action]");
+    if (!button || button.disabled) return;
+
+    const invitationId = button.dataset.invitationId;
+    const action = button.dataset.invitationAction;
+    const statusByAction = {
+        accept: "accepted",
+        decline: "declined",
+        cancel: "cancelled"
+    };
+    const nextStatus = statusByAction[action];
+    if (!invitationId || !nextStatus || !currentUser?.id) return;
+
+    button.disabled = true;
+    try {
+        const client = window.supabaseClient;
+        const updateValues = {
+            status: nextStatus,
+            responded_at: new Date().toISOString()
+        };
+
+        if (action === "accept") {
+            const invitation = await client
+                .from("workspace_invitations")
+                .select("email")
+                .eq("invitation_id", invitationId)
+                .eq("status", "pending")
+                .maybeSingle();
+            if (invitation.error) throw invitation.error;
+            if (!invitation.data) {
+                throw new Error("Lời mời không còn ở trạng thái chờ phản hồi.");
+            }
+
+            const matchingMember = await client
+                .from("members")
+                .select("member_id")
+                .ilike("email", invitation.data.email)
+                .limit(1)
+                .maybeSingle();
+            if (matchingMember.error) throw matchingMember.error;
+            updateValues.member_id = matchingMember.data?.member_id || null;
+        }
+
+        const { data, error } = await client
+            .from("workspace_invitations")
+            .update(updateValues)
+            .eq("invitation_id", invitationId)
+            .eq("status", "pending")
+            .select("invitation_id")
+            .maybeSingle();
+        if (error) throw error;
+        if (!data) {
+            throw new Error("Lời mời đã được xử lý hoặc bạn không có quyền cập nhật.");
+        }
+
+        await loadMembers();
+    } catch (error) {
+        console.error("Không thể cập nhật lời mời workspace:", error);
+        window.alert("Không thể cập nhật lời mời. Vui lòng kiểm tra quyền truy cập Supabase.");
+        button.disabled = false;
+    }
+}
+
+DOM.outgoingInvitations?.addEventListener("click", handleWorkspaceInvitationAction);
+DOM.incomingInvitations?.addEventListener("click", handleWorkspaceInvitationAction);
 
 
 /* =====================================================
@@ -1235,44 +1425,186 @@ document.addEventListener("click", event => {
 
 
 /* =====================================================
-   14. ADD MEMBER TO API
+   14. CREATE WORKSPACE MEMBER ACCOUNT
 ===================================================== */
+
+async function createWorkspaceMemberAccount({
+    memberName,
+    email,
+    initialPassword,
+    accountRole
+}) {
+    const client = window.supabaseClient;
+    const publicConfig = window.supabasePublicConfig;
+    if (!window.supabase?.createClient || !publicConfig?.url || !publicConfig?.key) {
+        throw new Error("Không tìm thấy cấu hình Supabase để tạo tài khoản.");
+    }
+
+    const memberId = `MEM_${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
+    let memberInserted = false;
+    let authUserCreated = false;
+    let invitationInserted = false;
+    let userId = null;
+    let requiresEmailConfirmation = false;
+
+    const removeInsertedRow = async (table, column, value) => {
+        const { error } = await client.from(table).delete().eq(column, value);
+        if (error) console.error(`Không thể hoàn tác dữ liệu trong ${table}:`, error);
+    };
+
+    try {
+        const { error: memberError } = await client
+            .from("members")
+            .insert({
+                member_id: memberId,
+                member_label: memberName,
+                email,
+                is_active: true
+            });
+        if (memberError) throw memberError;
+        memberInserted = true;
+
+        const { error: invitationError } = await client
+            .from("workspace_invitations")
+            .insert({
+                workspace_id: currentWorkspace.workspace_id,
+                email,
+                member_id: memberId,
+                invited_by: currentUser.id,
+                status: "accepted",
+                responded_at: new Date().toISOString()
+            });
+        if (invitationError) throw invitationError;
+        invitationInserted = true;
+
+        const signupClient = window.supabase.createClient(
+            publicConfig.url,
+            publicConfig.key,
+            {
+                auth: {
+                    persistSession: false,
+                    autoRefreshToken: false,
+                    detectSessionInUrl: false
+                }
+            }
+        );
+        const { data: signupData, error: signupError } = await signupClient.auth.signUp({
+            email,
+            password: initialPassword,
+            options: {
+                data: {
+                    full_name: memberName,
+                    member_id: memberId,
+                    role: accountRole,
+                    workspace_id: currentWorkspace.workspace_id
+                }
+            }
+        });
+        if (signupError) throw signupError;
+        if (!signupData.user || signupData.user.identities?.length === 0) {
+            throw new Error("Email này đã được đăng ký.");
+        }
+
+        userId = signupData.user.id;
+        authUserCreated = true;
+        requiresEmailConfirmation = !signupData.session;
+
+        const { error: teamMembershipError } = await client
+            .from("team_members")
+            .insert({
+                user_id: userId,
+                member_id: memberId,
+                account_role: accountRole
+            });
+        if (teamMembershipError) throw teamMembershipError;
+
+        return { requiresEmailConfirmation };
+    } catch (error) {
+        if (!authUserCreated && invitationInserted) {
+            const { error: rollbackError } = await client
+                .from("workspace_invitations")
+                .delete()
+                .eq("workspace_id", currentWorkspace.workspace_id)
+                .eq("member_id", memberId);
+            if (rollbackError) {
+                console.error("Không thể hoàn tác lời mời workspace:", rollbackError);
+            }
+        }
+        if (authUserCreated) {
+            throw new Error(
+                `Tài khoản đã tạo và được gắn với workspace, nhưng chưa liên kết vai trò team_members. Hãy kiểm tra quyền INSERT (RLS): ${error.message}`
+            );
+        }
+        if (memberInserted) {
+            await removeInsertedRow("members", "member_id", memberId);
+        }
+        throw error;
+    }
+}
 
 if (DOM.addForm) {
 
     DOM.addForm.addEventListener("submit", async event => {
 
         event.preventDefault();
-        if (!currentAccountIsTeamLeader) return;
-
-        const formData = new FormData(DOM.addForm);
-
-        const payload = Object.fromEntries(formData.entries());
-
-        try {
-
-            await apiRequest(
-                API_CONFIG.endpoints.members,
-                {
-                    method: "POST",
-                    body: JSON.stringify(payload)
-                }
-            );
-
-            closeAddMemberModal();
-
-            DOM.addForm.reset();
-
-            await loadMembers();
-
-        } catch (error) {
-
-            console.error("Không thể thêm thành viên:", error);
-
-            alert("Không thể thêm thành viên. Vui lòng thử lại.");
-
+        if (
+            !currentUser?.id ||
+            !currentWorkspace ||
+            !currentUserCanManageWorkspace
+        ) {
+            setInvitationFeedback("Chỉ trưởng nhóm trong workspace mới có thể thêm thành viên.", "error");
+            return;
         }
 
+        const formData = new FormData(DOM.addForm);
+        const memberName = String(formData.get("memberName") || "").trim();
+        const email = String(formData.get("memberEmail") || "")
+            .trim()
+            .toLowerCase();
+        const initialPassword = String(formData.get("initialPassword") || "");
+        const accountRole = String(formData.get("accountRole") || "");
+        if (
+            !memberName ||
+            memberName.length > 100 ||
+            !email ||
+            initialPassword.length < 8 ||
+            initialPassword.length > 128 ||
+            !["member", "leader"].includes(accountRole)
+        ) {
+            setInvitationFeedback("Vui lòng nhập họ tên, email hợp lệ, vai trò và mật khẩu từ 8 đến 128 ký tự.", "error");
+            return;
+        }
+        if (email === String(currentUser.email || "").trim().toLowerCase()) {
+            setInvitationFeedback("Bạn không thể gửi lời mời cho chính mình.", "error");
+            return;
+        }
+
+        const submitButton = DOM.addForm.querySelector('button[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+        setInvitationFeedback("");
+        try {
+            const result = await createWorkspaceMemberAccount({
+                memberName,
+                email,
+                initialPassword,
+                accountRole
+            });
+
+            DOM.addForm.reset();
+            await loadMembers();
+            closeAddMemberModal();
+            window.alert(result.requiresEmailConfirmation
+                ? "Đã tạo tài khoản và thêm vào workspace. Thành viên cần xác nhận email trước khi đăng nhập."
+                : "Đã tạo tài khoản và thêm thành viên vào workspace.");
+        } catch (error) {
+            console.error("Không thể tạo tài khoản thành viên:", error);
+            setInvitationFeedback(
+                error.message || "Không thể tạo tài khoản. Vui lòng thử lại.",
+                "error"
+            );
+        } finally {
+            if (submitButton) submitButton.disabled = false;
+        }
     });
 
 }
