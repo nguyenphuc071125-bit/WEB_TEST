@@ -710,6 +710,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         container.innerHTML = await response.text();
 
         window.loadChatHistory();
+        window.AppTheme?.refreshToggleButton();
 
         const currentPage = location.pathname
             .split("/")
