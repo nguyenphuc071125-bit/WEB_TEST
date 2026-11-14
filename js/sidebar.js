@@ -672,9 +672,9 @@ window.loadAppUser = async function () {
         membership = data;
     }
 
-    const name = user.user_metadata?.full_name ||
+    const name = membership?.members?.member_label ||
+        user.user_metadata?.full_name ||
         user.user_metadata?.name ||
-        membership?.members?.member_label ||
         user.email?.split("@")[0] ||
         "Thành viên";
     const accountRole = membership?.account_role || user.app_metadata?.role || "";

@@ -117,8 +117,8 @@ function renderUpcomingTaskAlert() {
         .sort((a, b) => a.daysUntil - b.daysUntil ||
             new Date(a.task.deadline) - new Date(b.task.deadline));
 
-    el.upcomingAlert.hidden = upcomingTasks.length === 0;
-    if (!upcomingTasks.length) return;
+    el.upcomingAlert.hidden = !state.isTeamLeader || upcomingTasks.length === 0;
+    if (!state.isTeamLeader || !upcomingTasks.length) return;
 
     el.upcomingAlertSummary.textContent =
         `Có ${upcomingTasks.length} công việc đến hạn trong 3 ngày tới (tính cả hôm nay).`;
@@ -149,17 +149,24 @@ function renderUpcomingTaskAlert() {
 function renderTeamUpcomingTaskAlert() {
     if (!el.teamUpcomingAlert || !el.teamUpcomingAlertList) return;
 
-    el.teamUpcomingAlert.hidden = !state.isTeamLeader;
-    if (!state.isTeamLeader) return;
+    el.teamUpcomingAlert.hidden = !state.isTeamLeader && !state.memberId;
+    if (!state.isTeamLeader && !state.memberId) return;
 
-    const upcomingTasks = state.allTasks
+    const tasksForAccount = state.isTeamLeader
+        ? state.allTasks
+        : state.tasks;
+    const upcomingTasks = tasksForAccount
         .filter(task => !task.isCancelled &&
-            task.assignments.some(assignment => assignment.member_id))
+            task.assignments.some(assignment => state.isTeamLeader
+                ? assignment.member_id
+                : String(assignment.member_id) === String(state.memberId)))
         .map(task => ({
             task,
             daysUntil: getUpcomingDays({
                 ...task,
-                status: task.overallStatus || task.status
+                status: state.isTeamLeader
+                    ? task.overallStatus || task.status
+                    : task.status
             })
         }))
         .filter(item => item.daysUntil !== null)
@@ -174,11 +181,15 @@ function renderTeamUpcomingTaskAlert() {
     }
 
     el.teamUpcomingAlertList.innerHTML = upcomingTasks.map(({ task }) => {
-        const groups = [...new Set(task.assignments
+        const assignmentsForAccount = state.isTeamLeader
+            ? task.assignments
+            : task.assignments.filter(assignment =>
+                String(assignment.member_id) === String(state.memberId));
+        const groups = [...new Set(assignmentsForAccount
             .map(assignment => assignment.role)
             .filter(Boolean)
             .map(formatRoleLabel))];
-        const members = [...new Set(task.assignments
+        const members = [...new Set(assignmentsForAccount
             .filter(assignment => assignment.member_id)
             .map(assignment => state.memberContacts.get(String(assignment.member_id))?.name)
             .filter(Boolean))];
@@ -192,7 +203,9 @@ function renderTeamUpcomingTaskAlert() {
                 </span>
                 <span class="team-deadline-task-due">
                     <strong>${escapeHTML(formatDate(task.deadline))}</strong>
-                    <small>${escapeHTML(statusLabel(task.overallStatus || task.status))}</small>
+                    <small>${escapeHTML(statusLabel(state.isTeamLeader
+                        ? task.overallStatus || task.status
+                        : task.status))}</small>
                 </span>
             </button>
         `;

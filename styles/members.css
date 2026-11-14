@@ -455,6 +455,24 @@ button {
     border-bottom: none;
 }
 
+.member-table tbody tr.current-user-member td {
+    background: #FFFCF0;
+    border-top: 2px solid #D4A017;
+    border-bottom: 2px solid #D4A017;
+}
+
+.member-table tbody tr.current-user-member td:first-child {
+    border-left: 2px solid #D4A017;
+}
+
+.member-table tbody tr.current-user-member td:last-child {
+    border-right: 2px solid #D4A017;
+}
+
+.member-table tbody tr.current-user-member:last-child td {
+    border-bottom: 2px solid #D4A017;
+}
+
 /* MEMBER NAME CELL */
 
 .member-name-cell {

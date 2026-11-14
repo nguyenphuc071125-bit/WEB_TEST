@@ -31,6 +31,8 @@ let members = [];
 
 let currentFilter = "all";
 let currentMemberId = null;
+let currentAccountMemberId = null;
+let currentAccountIsTeamLeader = false;
 let searchKeyword = "";
 let isLoading = false;
 let availabilityByDay = {};
@@ -76,6 +78,10 @@ const DOM = {
     closeDetail: document.getElementById("closeDetailPanel")
 };
 
+if (DOM.openAddButton) {
+    DOM.openAddButton.hidden = true;
+}
+
 
 /* =====================================================
    3. API SERVICE
@@ -117,6 +123,11 @@ async function loadMembers() {
     showLoading();
 
     try {
+        const { data: sessionData, error: sessionError } =
+            await window.supabaseClient.auth.getSession();
+        if (sessionError) throw sessionError;
+        const user = sessionData.session?.user || null;
+
         const [membersResult, availabilityResult, accountRolesResult] = await Promise.all([
             window.supabaseClient
                 .from("members")
@@ -140,12 +151,26 @@ async function loadMembers() {
                 .order("start_time"),
             window.supabaseClient
                 .from("team_members")
-                .select("member_id, account_role")
+                .select("user_id, member_id, account_role")
         ]);
 
         if (membersResult.error) throw membersResult.error;
         if (availabilityResult.error) throw availabilityResult.error;
         if (accountRolesResult.error) throw accountRolesResult.error;
+
+        const ownMembership = (accountRolesResult.data || []).find(row =>
+            user && String(row.user_id) === String(user.id)
+        );
+        currentAccountMemberId = ownMembership?.member_id ||
+            user?.user_metadata?.member_id ||
+            user?.app_metadata?.member_id ||
+            null;
+        currentAccountIsTeamLeader = isTeamLeaderRole(
+            ownMembership?.account_role || user?.app_metadata?.role
+        );
+        if (DOM.openAddButton) {
+            DOM.openAddButton.hidden = !currentAccountIsTeamLeader;
+        }
 
         const availabilityByMember = new Map();
         (availabilityResult.data || []).forEach(row => {
@@ -221,6 +246,12 @@ function getFilteredMembers() {
 
         return matchesSearch && matchesGroup;
 
+    }).sort((memberA, memberB) => {
+        const memberAIsCurrent = currentAccountMemberId != null &&
+            String(memberA.id) === String(currentAccountMemberId);
+        const memberBIsCurrent = currentAccountMemberId != null &&
+            String(memberB.id) === String(currentAccountMemberId);
+        return Number(memberBIsCurrent) - Number(memberAIsCurrent);
     });
 
 }
@@ -276,9 +307,20 @@ function normalizeMemberGroup(value) {
 
 function formatAccountRole(value) {
     const role = String(value || "").trim().toLowerCase();
-    if (role === "leader" || role === "trưởng nhóm") return "Trưởng nhóm";
+    if (isTeamLeaderRole(role)) return "Trưởng nhóm";
     if (role === "member" || role === "thành viên") return "Thành viên";
     return value ? String(value).trim() : "Thành viên";
+}
+
+function isTeamLeaderRole(value) {
+    return ["leader", "team_leader", "trưởng nhóm"]
+        .includes(String(value || "").trim().toLocaleLowerCase("vi"));
+}
+
+function canUpdateMember(memberId) {
+    return currentAccountIsTeamLeader ||
+        (currentAccountMemberId != null &&
+            String(currentAccountMemberId) === String(memberId));
 }
 
 
@@ -323,6 +365,10 @@ function renderMembers() {
             status === "Đang hoạt động";
 
         row.dataset.memberId = member.id;
+        if (currentAccountMemberId != null &&
+            String(member.id) === String(currentAccountMemberId)) {
+            row.classList.add("current-user-member");
+        }
 
         row.innerHTML = `
 
@@ -469,7 +515,6 @@ DOM.filters.forEach(button => {
 
 });
 
-
 function setMemberFilter(group) {
     if (!group) return;
 
@@ -478,7 +523,6 @@ function setMemberFilter(group) {
     DOM.filters.forEach(button => {
         button.classList.toggle("active", button.dataset.group === group);
     });
-
     updateTableTitle();
     renderMembers();
 }
@@ -705,14 +749,16 @@ function renderMemberDetail(member) {
         </div>
 
 
-        <button
-            type="button"
-            class="save-btn"
-            id="openUpdateMember"
-            data-id="${escapeHTML(member.id)}"
-        >
-            Cập nhật thông tin
-        </button>
+        ${canUpdateMember(member.id) ? `
+            <button
+                type="button"
+                class="save-btn"
+                id="openUpdateMember"
+                data-id="${escapeHTML(member.id)}"
+            >
+                Cập nhật thông tin
+            </button>
+        ` : ""}
 
     `;
 
@@ -742,7 +788,7 @@ if (DOM.closeDetail) {
 
 function openAddMemberModal() {
 
-    if (!DOM.addModal) return;
+    if (!currentAccountIsTeamLeader || !DOM.addModal) return;
 
     DOM.addModal.hidden = false;
 
@@ -796,7 +842,7 @@ function openUpdateMemberModal(memberId) {
         item => String(item.id) === String(memberId)
     );
 
-    if (!member || !DOM.updateModal) return;
+    if (!member || !canUpdateMember(member.id) || !DOM.updateModal) return;
 
     currentMemberId = memberId;
 
@@ -1017,6 +1063,10 @@ document.addEventListener("click", event => {
 async function saveMemberAvailability() {
     const button = document.getElementById("saveAvailabilityButton");
     if (!currentMemberId || !button) return;
+    if (!canUpdateMember(currentMemberId)) {
+        showAvailabilityMessage("Bạn chỉ có thể cập nhật thời gian rảnh của chính mình.", "error");
+        return;
+    }
 
     const rows = [];
     for (const [day, ranges] of Object.entries(availabilityByDay)) {
@@ -1193,6 +1243,7 @@ if (DOM.addForm) {
     DOM.addForm.addEventListener("submit", async event => {
 
         event.preventDefault();
+        if (!currentAccountIsTeamLeader) return;
 
         const formData = new FormData(DOM.addForm);
 
@@ -1238,6 +1289,11 @@ if (DOM.updateForm) {
         event.preventDefault();
 
         if (!currentMemberId) return;
+        if (!canUpdateMember(currentMemberId)) {
+            alert("Bạn chỉ có thể cập nhật thông tin của chính mình.");
+            closeUpdateMemberModal();
+            return;
+        }
 
         const formData = new FormData(DOM.updateForm);
         const memberName = String(formData.get("memberName") || "").trim();
@@ -1343,6 +1399,13 @@ if (DOM.updateForm) {
             closeUpdateMemberModal();
             await loadMembers();
             await openMemberDetail(memberId);
+            if (String(memberId) === String(currentAccountMemberId) && window.appUser) {
+                const updatedMember = members.find(item => String(item.id) === String(memberId));
+                if (updatedMember) {
+                    window.appUser = { ...window.appUser, name: updatedMember.name };
+                    window.renderAppUser?.(window.appUser);
+                }
+            }
 
         } catch (error) {
             console.error("Không thể cập nhật thành viên:", error);
