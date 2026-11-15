@@ -780,29 +780,66 @@ window.ensurePersonalWorkspace = function (user) {
 
     const request = (async () => {
         const client = window.supabaseClient;
-        if (user.email) {
-            const { data: acceptedInvitations, error: invitationError } = await client
-                .from("workspace_invitations")
-                .select("workspace_id")
-                .ilike("email", user.email)
+        let memberId = user.memberId || null;
+        let workspaceId = user.workspaceId || null;
+        if (!memberId || !workspaceId) {
+            const { data: membership, error: membershipError } = await client
+                .from("team_members")
+                .select("member_id, workspace_id")
+                .eq("user_id", user.id)
+                .maybeSingle();
+            if (membershipError) throw membershipError;
+            memberId = membership?.member_id || null;
+            workspaceId = membership?.workspace_id || null;
+        }
+        if (workspaceId) {
+            const { data: workspace, error: workspaceError } = await client
+                .from("workspaces")
+                .select("workspace_id, workspace_name, created_by, created_at")
+                .eq("workspace_id", workspaceId)
+                .maybeSingle();
+            if (workspaceError) throw workspaceError;
+            if (!workspace) {
+                throw new Error("Không tìm thấy workspace được liên kết với tài khoản.");
+            }
+            window.personalWorkspace = workspace;
+            return workspace;
+        }
+        const findAcceptedInvitations = async query => {
+            const { data, error } = await query
                 .eq("status", "accepted")
                 .order("responded_at", { ascending: false })
                 .limit(1);
-            if (invitationError) throw invitationError;
+            if (error) throw error;
+            return data || [];
+        };
 
-            if (acceptedInvitations?.length) {
-                const { data: invitedWorkspace, error: invitedWorkspaceError } = await client
-                    .from("workspaces")
-                    .select("workspace_id, workspace_name, created_by, created_at")
-                    .eq("workspace_id", acceptedInvitations[0].workspace_id)
-                    .maybeSingle();
-                if (invitedWorkspaceError) throw invitedWorkspaceError;
-                if (!invitedWorkspace) {
-                    throw new Error("Không tìm thấy workspace của lời mời đã chấp nhận.");
-                }
-                window.personalWorkspace = invitedWorkspace;
-                return invitedWorkspace;
+        let acceptedInvitations = [];
+        if (memberId) {
+            acceptedInvitations = await findAcceptedInvitations(client
+                .from("workspace_invitations")
+                .select("workspace_id")
+                .eq("member_id", memberId));
+        }
+        if (!acceptedInvitations.length && user.email) {
+            acceptedInvitations = await findAcceptedInvitations(client
+                .from("workspace_invitations")
+                .select("workspace_id")
+                .eq("email", String(user.email).trim().toLowerCase()));
+        }
+
+        if (acceptedInvitations.length) {
+            const { data: invitedWorkspace, error: invitedWorkspaceError } = await client
+                .from("workspaces")
+                .select("workspace_id, workspace_name, created_by, created_at")
+                .eq("workspace_id", acceptedInvitations[0].workspace_id)
+                .maybeSingle();
+            if (invitedWorkspaceError) throw invitedWorkspaceError;
+            if (!invitedWorkspace) {
+                throw new Error("Không tìm thấy workspace của lời mời đã chấp nhận.");
             }
+            window.personalWorkspace = invitedWorkspace;
+            return invitedWorkspace;
         }
 
         const { data: existingWorkspaces, error: workspaceError } = await client

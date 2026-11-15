@@ -91,7 +91,7 @@
 
                 const { data, error } = await client
                     .from("events")
-                    .select("event_id, event_label, event_category, category_note, n_tasks, first_on_air_date, last_on_air_date, is_completed")
+                    .select("event_id, event_label, event_category, category_note, n_tasks, first_on_air_date, last_on_air_date, is_completed, status")
                     .order("event_id", { ascending: true });
 
                 if (error) {
@@ -108,16 +108,19 @@
         }
 
         /**
-         * Xác định sự kiện đang diễn ra mặc định:
-         * 1. Ưu tiên sự kiện đã lưu trong localStorage
-         * 2. Nếu chưa có, chọn sự kiện có ngày hôm nay nằm giữa first_on_air_date và last_on_air_date
-         * 3. Nếu không có, chọn sự kiện gần nhất có công việc (ví dụ EVT_10 hoặc EVT_11)
+         * Ưu tiên sự kiện active trong workspace, sau đó dùng lựa chọn lưu cục bộ.
          */
         async getOrDetectOngoingEvent() {
             const events = await this.getEventsList();
             if (!events.length) return null;
 
             const availableEvents = events.filter(event => event.is_completed !== true);
+            const activeEvent = availableEvents.find(event => event.status === "active");
+            if (activeEvent) {
+                this.setActiveEventId(activeEvent.event_id);
+                return activeEvent;
+            }
+
             const savedId = this.getActiveEventId();
             if (savedId) {
                 const found = availableEvents.find(e => e.event_id === savedId);

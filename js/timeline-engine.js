@@ -428,6 +428,10 @@
             }
 
             const { event, tasks } = plan;
+            const { data: { user }, error: userError } = await client.auth.getUser();
+            if (userError) throw userError;
+            if (!user) throw new Error("Vui lòng đăng nhập để lưu sự kiện.");
+            const workspace = await window.ensurePersonalWorkspace(user);
 
             // 1. Tìm mã Event ID kế tiếp
             let targetEventId = event.event_id;
@@ -458,7 +462,9 @@
                 category_note: event.category_note || event.description || "Lập kế hoạch tự động bởi AI Assistant",
                 n_tasks: tasks.length,
                 first_on_air_date: firstOnAir,
-                last_on_air_date: lastOnAir
+                last_on_air_date: lastOnAir,
+                workspace_id: workspace.workspace_id,
+                status: event.status || "draft"
             };
 
             const { error: eventError } = await client

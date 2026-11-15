@@ -96,6 +96,7 @@ async function loadMembers() {
                 .from("members")
                 .select(`
                     member_id,
+                    workspace_id,
                     member_label,
                     email,
                     is_active,
@@ -155,6 +156,7 @@ async function loadMembers() {
 
             return {
                 id: member.member_id,
+                workspaceId: member.workspace_id || null,
                 name: member.member_label || "",
                 email: member.email || "",
                 groups,
@@ -170,13 +172,14 @@ async function loadMembers() {
         });
 
         await loadWorkspaceInvitations(user);
-        currentWorkspaceMemberIds = new Set([
-            ...currentWorkspaceMemberIds,
-            ...(currentAccountMemberId ? [String(currentAccountMemberId)] : [])
-        ]);
-        members = members.filter(member =>
-            currentWorkspaceMemberIds.has(String(member.id))
-        );
+        members = members.filter(member => {
+            const belongsToWorkspace = currentWorkspace?.workspace_id &&
+                String(member.workspaceId) === String(currentWorkspace.workspace_id);
+            const hasLegacyWorkspaceLink = currentWorkspaceMemberIds.has(String(member.id));
+            const isCurrentMember = currentAccountMemberId &&
+                String(currentAccountMemberId) === String(member.id);
+            return belongsToWorkspace || hasLegacyWorkspaceLink || isCurrentMember;
+        });
         renderMembers();
         updateMemberCounts();
     } catch (error) {
@@ -286,13 +289,19 @@ async function loadWorkspaceInvitations(user) {
                 .ilike("email", user.email)
                 .order("created_at", { ascending: false })
             : Promise.resolve({ data: [], error: null });
+        const workspaceMembersRequest = client
+            .from("team_members")
+            .select("member_id")
+            .eq("workspace_id", currentWorkspace.workspace_id);
 
-        const [outgoingResult, incomingResult] = await Promise.all([
+        const [outgoingResult, incomingResult, workspaceMembersResult] = await Promise.all([
             outgoingRequest,
-            incomingRequest
+            incomingRequest,
+            workspaceMembersRequest
         ]);
         if (outgoingResult.error) throw outgoingResult.error;
         if (incomingResult.error) throw incomingResult.error;
+        if (workspaceMembersResult.error) throw workspaceMembersResult.error;
 
         const hasAcceptedWorkspaceInvitation = (incomingResult.data || []).some(invitation =>
             invitation.status === "accepted" &&
@@ -300,16 +309,23 @@ async function loadWorkspaceInvitations(user) {
         );
         currentUserCanManageWorkspace = currentAccountIsTeamLeader &&
             (isWorkspaceOwner || hasAcceptedWorkspaceInvitation);
-        currentWorkspaceMemberIds = new Set(
-            [...(outgoingResult.data || []), ...(incomingResult.data || [])]
-                .filter(invitation =>
-                    invitation.status === "accepted" &&
-                    String(invitation.workspace_id || currentWorkspace.workspace_id) ===
-                        String(currentWorkspace.workspace_id) &&
-                    invitation.member_id
-                )
-                .map(invitation => String(invitation.member_id))
-        );
+        const workspaceMemberIds = (workspaceMembersResult.data || [])
+            .map(membership => String(membership.member_id));
+        const acceptedInvitationMemberIds = [
+            ...(outgoingResult.data || []),
+            ...(incomingResult.data || [])
+        ]
+            .filter(invitation =>
+                invitation.status === "accepted" &&
+                String(invitation.workspace_id || currentWorkspace.workspace_id) ===
+                    String(currentWorkspace.workspace_id) &&
+                invitation.member_id
+            )
+            .map(invitation => String(invitation.member_id));
+        currentWorkspaceMemberIds = new Set([
+            ...workspaceMemberIds,
+            ...acceptedInvitationMemberIds
+        ]);
         if (DOM.openAddButton) {
             DOM.openAddButton.hidden = !currentUserCanManageWorkspace;
         }
@@ -1435,111 +1451,34 @@ async function createWorkspaceMemberAccount({
     accountRole
 }) {
     const client = window.supabaseClient;
-    const publicConfig = window.supabasePublicConfig;
-    if (!window.supabase?.createClient || !publicConfig?.url || !publicConfig?.key) {
-        throw new Error("Không tìm thấy cấu hình Supabase để tạo tài khoản.");
+    if (!client?.functions?.invoke) {
+        throw new Error("Supabase client chưa hỗ trợ gọi Edge Function.");
     }
 
-    const memberId = `MEM_${crypto.randomUUID().replaceAll("-", "").slice(0, 12).toUpperCase()}`;
-    let memberInserted = false;
-    let authUserCreated = false;
-    let invitationInserted = false;
-    let userId = null;
-    let requiresEmailConfirmation = false;
-
-    const removeInsertedRow = async (table, column, value) => {
-        const { error } = await client.from(table).delete().eq(column, value);
-        if (error) console.error(`Không thể hoàn tác dữ liệu trong ${table}:`, error);
-    };
-
-    try {
-        const { error: memberError } = await client
-            .from("members")
-            .insert({
-                member_id: memberId,
-                member_label: memberName,
-                email,
-                is_active: true
-            });
-        if (memberError) throw memberError;
-        memberInserted = true;
-
-        const { error: invitationError } = await client
-            .from("workspace_invitations")
-            .insert({
-                workspace_id: currentWorkspace.workspace_id,
-                email,
-                member_id: memberId,
-                invited_by: currentUser.id,
-                status: "accepted",
-                responded_at: new Date().toISOString()
-            });
-        if (invitationError) throw invitationError;
-        invitationInserted = true;
-
-        const signupClient = window.supabase.createClient(
-            publicConfig.url,
-            publicConfig.key,
-            {
-                auth: {
-                    persistSession: false,
-                    autoRefreshToken: false,
-                    detectSessionInUrl: false
-                }
-            }
-        );
-        const { data: signupData, error: signupError } = await signupClient.auth.signUp({
+    const { data, error } = await client.functions.invoke("create-workspace-member", {
+        body: {
+            memberName,
             email,
-            password: initialPassword,
-            options: {
-                data: {
-                    full_name: memberName,
-                    member_id: memberId,
-                    role: accountRole,
-                    workspace_id: currentWorkspace.workspace_id
-                }
+            initialPassword,
+            accountRole,
+            workspaceId: currentWorkspace.workspace_id
+        }
+    });
+
+    if (error) {
+        if (error.context instanceof Response) {
+            const response = await error.context.clone().json().catch(() => null);
+            if (typeof response?.error === "string") {
+                throw new Error(response.error);
             }
-        });
-        if (signupError) throw signupError;
-        if (!signupData.user || signupData.user.identities?.length === 0) {
-            throw new Error("Email này đã được đăng ký.");
-        }
-
-        userId = signupData.user.id;
-        authUserCreated = true;
-        requiresEmailConfirmation = !signupData.session;
-
-        const { error: teamMembershipError } = await client
-            .from("team_members")
-            .insert({
-                user_id: userId,
-                member_id: memberId,
-                account_role: accountRole
-            });
-        if (teamMembershipError) throw teamMembershipError;
-
-        return { requiresEmailConfirmation };
-    } catch (error) {
-        if (!authUserCreated && invitationInserted) {
-            const { error: rollbackError } = await client
-                .from("workspace_invitations")
-                .delete()
-                .eq("workspace_id", currentWorkspace.workspace_id)
-                .eq("member_id", memberId);
-            if (rollbackError) {
-                console.error("Không thể hoàn tác lời mời workspace:", rollbackError);
-            }
-        }
-        if (authUserCreated) {
-            throw new Error(
-                `Tài khoản đã tạo và được gắn với workspace, nhưng chưa liên kết vai trò team_members. Hãy kiểm tra quyền INSERT (RLS): ${error.message}`
-            );
-        }
-        if (memberInserted) {
-            await removeInsertedRow("members", "member_id", memberId);
         }
         throw error;
     }
+    if (!data?.userId || !data?.memberId || data.workspaceId !== currentWorkspace.workspace_id) {
+        throw new Error("Edge Function không trả về thông tin liên kết thành viên hợp lệ.");
+    }
+
+    return { requiresEmailConfirmation: false };
 }
 
 if (DOM.addForm) {

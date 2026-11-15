@@ -44,6 +44,7 @@ const DOM = {
 
 const state = {
     currentUser: null,
+    workspaceId: null,
     conversationId: null,
     messages: [],
     isSending: false,
@@ -74,6 +75,8 @@ async function loadUserInfo() {
         const user = await window.loadAppUser();
         if (!user) return;
         state.currentUser = user;
+        const workspace = await window.ensurePersonalWorkspace(user);
+        state.workspaceId = workspace.workspace_id;
         if (DOM.greetingName) DOM.greetingName.textContent = user.name;
     } catch (error) {
         console.error("Không thể tải thông tin người dùng:", error);
@@ -554,6 +557,10 @@ function initializeCreateEventModal() {
         DOM.createEventFeedback.classList.remove("is-error");
 
         try {
+            if (!state.workspaceId) {
+                throw new Error("Không xác định được workspace hiện tại.");
+            }
+
             const { data: existingEvents, error: listError } = await client
                 .from("events")
                 .select("event_id");
@@ -572,12 +579,14 @@ function initializeCreateEventModal() {
                 n_tasks: 0,
                 first_on_air_date: null,
                 last_on_air_date: null,
-                is_completed: false
+                is_completed: false,
+                workspace_id: state.workspaceId,
+                status: "draft"
             };
             const { data: createdEvent, error: insertError } = await client
                 .from("events")
                 .insert(eventPayload)
-                .select("event_id, event_label, event_category, category_note, n_tasks, first_on_air_date, last_on_air_date, is_completed")
+                .select("event_id, event_label, event_category, category_note, n_tasks, first_on_air_date, last_on_air_date, is_completed, status")
                 .single();
             if (insertError) throw insertError;
 
