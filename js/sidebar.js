@@ -908,13 +908,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (user) {
             initializeAceChatbot(container, user);
             window.renderAppUser(user);
-            const workspaceLabel = container.querySelector("#sidebarWorkspaceName");
             try {
-                const workspace = await window.ensurePersonalWorkspace(user);
-                if (workspaceLabel) workspaceLabel.textContent = workspace.workspace_name;
+                await window.ensurePersonalWorkspace(user);
             } catch (workspaceError) {
                 console.error("Không thể tải workspace cá nhân:", workspaceError);
-                if (workspaceLabel) workspaceLabel.textContent = `Workspace của ${user.name}`;
             }
             await initializeAppNotificationCenter(user, container);
         }
