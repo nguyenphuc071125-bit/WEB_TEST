@@ -281,7 +281,7 @@ forgotPassword.addEventListener("click", async function () {
         if (error) throw error;
 
         formFeedback.textContent =
-            "Nếu email có tài khoản, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu.";
+            "Đã tiếp nhận yêu cầu. Nếu email có tài khoản, bạn sẽ nhận được liên kết đặt lại mật khẩu; nếu chưa đăng ký, sẽ không có email được gửi. Vì lý do bảo mật, hệ thống không xác nhận email có tài khoản hay không.";
         formFeedback.style.color = "#15803d";
     } catch (error) {
         console.error("Không thể gửi email đặt lại mật khẩu:", error);

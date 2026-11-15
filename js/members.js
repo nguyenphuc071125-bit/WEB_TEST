@@ -19,6 +19,7 @@ let currentAccountMemberId = null;
 let currentAccountIsTeamLeader = false;
 let currentWorkspace = null;
 let currentUserCanManageWorkspace = false;
+let workspaceMemberRemovalReady = false;
 let currentWorkspaceMemberIds = new Set();
 let currentUser = null;
 let searchKeyword = "";
@@ -81,6 +82,43 @@ if (DOM.openAddButton) {
    4. LOAD MEMBERS FROM DATABASE
 ===================================================== */
 
+const MEMBER_PROFILE_FIELDS = `
+    member_id,
+    workspace_id,
+    member_label,
+    email,
+    is_active,
+    n_roles_in_roster,
+    n_tasks_assigned,
+    member_roles (
+        role,
+        in_roster,
+        n_tasks_assigned
+    )
+`;
+
+async function loadMemberProfiles() {
+    const client = window.supabaseClient;
+    const result = await client
+        .from("members")
+        .select(`removed_from_workspace_at, ${MEMBER_PROFILE_FIELDS}`);
+
+    if (!result.error) {
+        workspaceMemberRemovalReady = true;
+        return result;
+    }
+
+    const errorText = `${result.error.message || ""} ${result.error.details || ""}`;
+    if (!errorText.includes("removed_from_workspace_at")) {
+        throw result.error;
+    }
+
+    workspaceMemberRemovalReady = false;
+    return client
+        .from("members")
+        .select(MEMBER_PROFILE_FIELDS);
+}
+
 async function loadMembers() {
     showLoading();
 
@@ -92,22 +130,7 @@ async function loadMembers() {
         currentUser = user;
 
         const [membersResult, availabilityResult, accountRolesResult] = await Promise.all([
-            window.supabaseClient
-                .from("members")
-                .select(`
-                    member_id,
-                    workspace_id,
-                    member_label,
-                    email,
-                    is_active,
-                    n_roles_in_roster,
-                    n_tasks_assigned,
-                    member_roles (
-                        role,
-                        in_roster,
-                        n_tasks_assigned
-                    )
-                `),
+            loadMemberProfiles(),
             window.supabaseClient
                 .from("member_availability")
                 .select("availability_id, member_id, weekday, start_time, end_time")
@@ -157,6 +180,7 @@ async function loadMembers() {
             return {
                 id: member.member_id,
                 workspaceId: member.workspace_id || null,
+                removedFromWorkspace: Boolean(member.removed_from_workspace_at),
                 name: member.member_label || "",
                 email: member.email || "",
                 groups,
@@ -173,6 +197,7 @@ async function loadMembers() {
 
         await loadWorkspaceInvitations(user);
         members = members.filter(member => {
+            if (member.removedFromWorkspace) return false;
             const belongsToWorkspace = currentWorkspace?.workspace_id &&
                 String(member.workspaceId) === String(currentWorkspace.workspace_id);
             const hasLegacyWorkspaceLink = currentWorkspaceMemberIds.has(String(member.id));
@@ -756,6 +781,11 @@ function renderMemberDetail(member) {
         task.status !== "completed"
     );
     const availability = renderAvailabilitySummary(member.availability || []);
+    const canEditMember = canUpdateMember(member.id);
+    const canRemoveMember = workspaceMemberRemovalReady &&
+        currentUserCanManageWorkspace &&
+        !isTeamLeaderRole(member.role) &&
+        String(member.id) !== String(currentAccountMemberId);
 
     DOM.detailContent.innerHTML = `
 
@@ -882,15 +912,29 @@ function renderMemberDetail(member) {
         </div>
 
 
-        ${canUpdateMember(member.id) ? `
-            <button
-                type="button"
-                class="save-btn"
-                id="openUpdateMember"
-                data-id="${escapeHTML(member.id)}"
-            >
-                Cập nhật thông tin
-            </button>
+        ${canEditMember || canRemoveMember ? `
+            <div class="detail-member-actions">
+            ${canEditMember ? `
+                <button
+                    type="button"
+                    class="save-btn"
+                    id="openUpdateMember"
+                    data-id="${escapeHTML(member.id)}"
+                >
+                    Cập nhật thông tin
+                </button>
+            ` : ""}
+            ${canRemoveMember ? `
+                <button
+                    type="button"
+                    class="delete-member-btn"
+                    id="removeMemberFromWorkspace"
+                    data-id="${escapeHTML(member.id)}"
+                >
+                    Xóa thành viên
+                </button>
+            ` : ""}
+            </div>
         ` : ""}
 
     `;
@@ -1176,6 +1220,10 @@ function renderAvailabilitySlots() {
     const hidden = document.getElementById("availabilityValue");
     if (!container) return;
 
+    const scrollPositions = new Map(
+        [...container.querySelectorAll("[data-availability-hour-list]")]
+            .map(list => [list.dataset.availabilityHourList, list.scrollLeft])
+    );
     const selectedDays = Object.keys(availabilityByDay)
         .filter(day => Object.hasOwn(AVAILABILITY_DAY_NAMES, day))
         .sort((a, b) => Number(a) - Number(b));
@@ -1204,7 +1252,7 @@ function renderAvailabilitySlots() {
                     <strong>${AVAILABILITY_DAY_NAMES[day]}</strong>
                     <span>Chọn giờ rảnh</span>
                 </div>
-                <div class="availability-hour-list" role="group" aria-label="Chọn giờ rảnh ${AVAILABILITY_DAY_NAMES[day]}">
+                <div class="availability-hour-list" data-availability-hour-list="${day}" role="group" aria-label="Chọn giờ rảnh ${AVAILABILITY_DAY_NAMES[day]}">
                     ${Array.from({ length: 16 }, (_, index) => index + 6).map(hour => {
                         const time = `${String(hour).padStart(2, "0")}:00`;
                         const endTime = `${String(hour + 1).padStart(2, "0")}:00`;
@@ -1222,6 +1270,11 @@ function renderAvailabilitySlots() {
             </section>
         `;
     }).join("") + '<p class="availability-help">Mỗi ô tương ứng 1 giờ. Chọn liên tiếp để tạo thành một khoảng giờ rảnh.</p>';
+
+    container.querySelectorAll("[data-availability-hour-list]").forEach(list => {
+        const scrollLeft = scrollPositions.get(list.dataset.availabilityHourList);
+        if (scrollLeft !== undefined) list.scrollLeft = scrollLeft;
+    });
 }
 
 document.addEventListener("click", event => {
@@ -1413,6 +1466,11 @@ document.addEventListener("click", event => {
 
     }
 
+    const removeMemberButton = event.target.closest("#removeMemberFromWorkspace");
+    if (removeMemberButton) {
+        removeWorkspaceMember(removeMemberButton.dataset.id, removeMemberButton);
+    }
+
 
     // Đóng modal
     const closeButton = event.target.closest(
@@ -1438,6 +1496,49 @@ document.addEventListener("click", event => {
     }
 
 });
+
+async function removeWorkspaceMember(memberId, button) {
+    const member = members.find(item => String(item.id) === String(memberId));
+    if (!member) {
+        window.alert("Không tìm thấy thành viên cần xóa.");
+        return;
+    }
+    if (!currentUserCanManageWorkspace) {
+        window.alert("Chỉ trưởng nhóm mới có thể xóa thành viên khác khỏi workspace.");
+        return;
+    }
+    if (String(memberId) === String(currentAccountMemberId)) {
+        window.alert("Bạn không thể tự xóa mình khỏi workspace.");
+        return;
+    }
+
+    const confirmed = window.confirm(
+        `Xóa ${member.name || "thành viên này"} khỏi workspace? Tài khoản và lịch sử công việc sẽ được giữ lại.`
+    );
+    if (!confirmed) return;
+
+    button.disabled = true;
+    button.textContent = "Đang xóa…";
+    try {
+        const { error } = await window.supabaseClient.rpc("remove_workspace_member", {
+            p_member_id: String(memberId)
+        });
+        if (error) throw error;
+
+        DOM.detailPanel.hidden = true;
+        currentMemberId = null;
+        await loadMembers();
+        window.alert(`${member.name || "Thành viên"} đã được xóa khỏi workspace.`);
+    } catch (error) {
+        console.error("Không thể xóa thành viên khỏi workspace:", error);
+        window.alert(`Không thể xóa thành viên khỏi workspace: ${error.message || "Lỗi Supabase không xác định."}`);
+    } finally {
+        if (button.isConnected) {
+            button.disabled = false;
+            button.textContent = "Xóa thành viên";
+        }
+    }
+}
 
 
 /* =====================================================

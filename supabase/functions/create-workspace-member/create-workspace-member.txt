@@ -295,6 +295,24 @@ Deno.serve(async request => {
             if (roleError) throw roleError;
         }
 
+        const { error: restoreMemberError } = await adminClient
+            .from("members")
+            .update({ is_active: true })
+            .eq("member_id", membership.member_id)
+            .eq("workspace_id", workspaceId);
+        if (restoreMemberError) throw restoreMemberError;
+
+        const { error: clearRemovalError } = await adminClient
+            .from("members")
+            .update({ removed_from_workspace_at: null })
+            .eq("member_id", membership.member_id)
+            .eq("workspace_id", workspaceId);
+        if (clearRemovalError) {
+            const errorText = `${clearRemovalError.message || ""} ${clearRemovalError.details || ""}`;
+            if (!errorText.includes("removed_from_workspace_at")) throw clearRemovalError;
+            console.warn("Workspace removal migration is not applied; no removal marker was cleared.");
+        }
+
         return jsonResponse(
             { userId: createdUserId, memberId: membership.member_id, workspaceId },
             201

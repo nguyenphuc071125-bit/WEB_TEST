@@ -38,28 +38,44 @@
                                autocomplete="off">
                     </label>
 
-                    <button type="button" class="filter-toggle-btn" id="toggleTaskFilters">
-                        <i data-lucide="sliders-horizontal"></i>
-                        Lọc
-                    </button>
+                    <div class="filter-menu-container">
+                        <button type="button" class="filter-toggle-btn" id="toggleTaskFilters"
+                                aria-expanded="false" aria-controls="advancedTaskFilters">
+                            <i data-lucide="sliders-horizontal"></i>
+                            Bộ lọc
+                        </button>
+
+                        <section class="advanced-filters" id="advancedTaskFilters" hidden>
+                            <div class="filter-field">
+                                <label for="groupFilter">Nhóm chức năng</label>
+                                <select id="groupFilter">
+                                    <option value="">Tất cả nhóm</option>
+                                    <option value="Edit">Edit</option>
+                                    <option value="Design">Design</option>
+                                    <option value="Content">Content</option>
+                                    <option value="Tech">Tech</option>
+                                    <option value="Photo">Photo</option>
+                                </select>
+                            </div>
+                            <div class="filter-panel-section">
+                                <span class="filter-panel-label">Trạng thái</span>
+                                <nav class="status-tabs" aria-label="Lọc theo trạng thái">
+                                    <button type="button" class="status-tab active" data-status="all">Tất cả</button>
+                                    <button type="button" class="status-tab" data-status="not_started">Chưa bắt đầu</button>
+                                    <button type="button" class="status-tab" data-status="in_progress">Đang thực hiện</button>
+                                    <button type="button" class="status-tab" data-status="pending_review">Chờ duyệt</button>
+                                    <button type="button" class="status-tab" data-status="completed">Đã hoàn thành</button>
+                                    <button type="button" class="status-tab overdue-status-tab" id="overdueTasksTab"
+                                            data-overdue-filter aria-pressed="false">
+                                        Trễ hạn <span id="overdueTasksTabCount">0</span>
+                                    </button>
+                                </nav>
+                            </div>
+                            <button type="button" class="text-btn" id="resetTaskFilters">Đặt lại bộ lọc</button>
+                        </section>
+                    </div>
                 </div>
             </header>
-
-            <!-- Filter panel -->
-            <section class="advanced-filters" id="advancedTaskFilters" hidden>
-                <div class="filter-field">
-                    <label for="groupFilter">Nhóm chức năng</label>
-                    <select id="groupFilter">
-                        <option value="">Tất cả nhóm</option>
-                        <option value="Edit">Edit</option>
-                        <option value="Design">Design</option>
-                        <option value="Content">Content</option>
-                        <option value="Tech">Tech</option>
-                        <option value="Photo">Photo</option>
-                    </select>
-                </div>
-                <button type="button" class="text-btn" id="resetTaskFilters">Đặt lại bộ lọc</button>
-            </section>
 
             <!-- Statistics: values are populated from API -->
             <section class="task-stats" aria-label="Thống kê công việc">
@@ -128,19 +144,6 @@
                 </div>
                 <div class="team-deadline-list" id="teamUpcomingTaskAlertList"></div>
             </section>
-
-            <!-- Status tabs -->
-            <nav class="status-tabs" aria-label="Lọc theo trạng thái">
-                <button type="button" class="status-tab active" data-status="all">Tất cả</button>
-                <button type="button" class="status-tab" data-status="not_started">Chưa bắt đầu</button>
-                <button type="button" class="status-tab" data-status="in_progress">Đang thực hiện</button>
-                <button type="button" class="status-tab" data-status="pending_review">Chờ duyệt</button>
-                <button type="button" class="status-tab" data-status="completed">Đã hoàn thành</button>
-                <button type="button" class="status-tab overdue-status-tab" id="overdueTasksTab"
-                        data-overdue-filter aria-pressed="false">
-                    Trễ hạn <span id="overdueTasksTabCount">0</span>
-                </button>
-            </nav>
 
             <!-- Tasks table -->
             <section class="task-table-card">

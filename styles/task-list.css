@@ -269,6 +269,10 @@ svg {
     background: var(--primary-soft);
 }
 
+.filter-menu-container {
+    position: relative;
+}
+
 
 /* =====================================================
    5. SUMMARY CARDS
@@ -562,7 +566,7 @@ button.summary-card {
 
 .filter-toolbar {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
 
     gap: 15px;
@@ -669,20 +673,39 @@ button.summary-card {
 /* Advanced filters */
 
 .advanced-filter-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 20;
     display: flex;
-    align-items: flex-end;
-    flex-wrap: wrap;
-
-    gap: 15px;
-
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    width: min(440px, calc(100vw - 32px));
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
     padding: 16px;
-
-    margin-top: 12px;
-
     background: var(--surface);
-
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.filter-panel-section {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.filter-panel-label {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.advanced-filter-panel .group-filter-list,
+.advanced-filter-panel .status-filter-list {
+    margin-bottom: 0;
 }
 
 

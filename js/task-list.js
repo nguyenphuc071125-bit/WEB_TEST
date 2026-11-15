@@ -688,16 +688,31 @@
 
     dom.toggleFilters?.addEventListener("click", () => {
       dom.advancedFilters.hidden = !dom.advancedFilters.hidden;
+      dom.toggleFilters.setAttribute("aria-expanded", String(!dom.advancedFilters.hidden));
     });
     dom.resetFilters?.addEventListener("click", () => {
       dom.search.value = "";
-      dom.groupFilter.value = "";
+      if (dom.groupFilter) dom.groupFilter.value = "";
       state.group = "";
       state.status = "all";
       state.overdueOnly = false;
       dom.groupTabs.forEach(b => b.classList.toggle("active", !b.dataset.group));
       syncFilterControls();
       applyFilters();
+    });
+
+    document.addEventListener("click", event => {
+      if (!event.target.closest(".filter-menu-container") && !dom.advancedFilters.hidden) {
+        dom.advancedFilters.hidden = true;
+        dom.toggleFilters.setAttribute("aria-expanded", "false");
+      }
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !dom.advancedFilters.hidden) {
+        dom.advancedFilters.hidden = true;
+        dom.toggleFilters.setAttribute("aria-expanded", "false");
+        dom.toggleFilters.focus();
+      }
     });
 
     dom.groupTabs.forEach(button => button.addEventListener("click", () => {

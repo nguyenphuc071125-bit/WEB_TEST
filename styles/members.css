@@ -817,6 +817,39 @@ button {
     margin-bottom: 23px;
 }
 
+.detail-member-actions {
+    display: flex;
+    gap: 9px;
+    margin-top: 18px;
+}
+
+.detail-member-actions > button {
+    flex: 1;
+}
+
+.delete-member-btn {
+    min-width: 95px;
+    height: 38px;
+    padding: 0 15px;
+    border: 1px solid #D92D20;
+    border-radius: 8px;
+    background: #D92D20;
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: 600;
+    transition: 0.2s ease;
+}
+
+.delete-member-btn:hover {
+    border-color: #B42318;
+    background: #B42318;
+}
+
+.delete-member-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
 .detail-section h4 {
     margin: 0 0 13px;
 

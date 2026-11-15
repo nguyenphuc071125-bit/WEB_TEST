@@ -1367,10 +1367,28 @@ if (filterToggle) {
             document.getElementById("advancedTaskFilters");
 
         panel.hidden = !panel.hidden;
+        filterToggle.setAttribute("aria-expanded", String(!panel.hidden));
 
     });
 
 }
+
+document.addEventListener("click", event => {
+    const panel = document.getElementById("advancedTaskFilters");
+    if (panel && !event.target.closest(".filter-menu-container") && !panel.hidden) {
+        panel.hidden = true;
+        filterToggle?.setAttribute("aria-expanded", "false");
+    }
+});
+
+document.addEventListener("keydown", event => {
+    const panel = document.getElementById("advancedTaskFilters");
+    if (event.key === "Escape" && panel && !panel.hidden) {
+        panel.hidden = true;
+        filterToggle?.setAttribute("aria-expanded", "false");
+        filterToggle?.focus();
+    }
+});
 
 
 document.getElementById("groupFilter")
