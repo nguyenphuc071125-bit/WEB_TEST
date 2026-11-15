@@ -22,7 +22,11 @@
     overdue: $("#overdueTasksCount"), overdueTabCount: $("#overdueTasksTabCount"),
     overdueCard: $("#overdueTasksCard"), overdueTab: $("#overdueTasksTab"),
     teamDeadlineAlert: $("#teamDeadlineAlert"), teamDeadlineCount: $("#teamDeadlineCount"),
-    teamDeadlineList: $("#teamDeadlineList"),
+    teamDeadlineList: $("#teamDeadlineList"), teamDeadlineDays: $("#teamDeadlineDays"),
+    teamDeadlineDaysLabel: $("#teamDeadlineDaysLabel"),
+    selectAllTeamDeadlineTasks: $("#selectAllTeamDeadlineTasks"),
+    remindSelectedTeamTasks: $("#remindSelectedTeamTasks"),
+    teamDeadlineFeedback: $("#teamDeadlineFeedback"),
     resultInfo: $("#taskResultInfo"), tbody: $("#taskTableBody"),
     tableInfo: $("#taskTableInfo"), previous: $("#previousPage"),
     next: $("#nextPage"), pageLabel: $("#currentPageLabel"),
@@ -36,7 +40,8 @@
   const state = {
     db: null, memberId: null, tasks: [], filtered: [], memberNames: new Map(), memberEmails: new Map(),
     group: "", status: "all", overdueOnly: false, isTeamLeader: false,
-    page: 1, selected: null, detailHistory: []
+    page: 1, selected: null, detailHistory: [], selectedDeadlineTaskIds: new Set(),
+    deadlineWindowDays: 3
   };
 
   const STATUS = {
@@ -211,9 +216,8 @@
     return "not_started";
   }
 
-  function daysUntilDeadline(task, now = new Date()) {
-    if (task.is_cancelled === true || taskStatus(task) === "completed" ||
-        !(task.assignments || []).some(assignment => assignment.member_id)) return null;
+  function daysUntilDeadline(task, now = new Date(), windowDays = state.deadlineWindowDays) {
+    if (task.is_cancelled === true || taskStatus(task) === "completed") return null;
 
     const timestamp = String(task.package_deadline_at || "");
     const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(timestamp)
@@ -234,7 +238,7 @@
 
       const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
       const daysUntil = Math.floor((dueDate.getTime() - today) / 86400000);
-      return daysUntil >= 0 && daysUntil <= 3 ? daysUntil : null;
+      return daysUntil >= 0 && daysUntil <= windowDays ? daysUntil : null;
     }
 
     const value = timestamp ||
@@ -247,7 +251,7 @@
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dueDay = new Date(dueAt.getFullYear(), dueAt.getMonth(), dueAt.getDate());
     const daysUntil = Math.floor((dueDay.getTime() - today.getTime()) / 86400000);
-    return daysUntil >= 0 && daysUntil <= 3 ? daysUntil : null;
+    return daysUntil >= 0 && daysUntil <= windowDays ? daysUntil : null;
   }
 
   function renderTeamDeadlines() {
@@ -263,6 +267,22 @@
           .localeCompare(String(b.task.package_deadline_at || b.task.package_deadline_date || "")));
 
     text(dom.teamDeadlineCount, upcoming.length);
+    text(dom.teamDeadlineDaysLabel, state.deadlineWindowDays);
+    const visibleTaskIds = new Set(upcoming.map(({ task }) => String(task.task_id)));
+    state.selectedDeadlineTaskIds = new Set(
+      [...state.selectedDeadlineTaskIds].filter(taskId => visibleTaskIds.has(taskId))
+    );
+    if (dom.selectAllTeamDeadlineTasks) {
+      const selectedCount = upcoming.filter(({ task }) =>
+        state.selectedDeadlineTaskIds.has(String(task.task_id))
+      ).length;
+      dom.selectAllTeamDeadlineTasks.checked = upcoming.length > 0 && selectedCount === upcoming.length;
+      dom.selectAllTeamDeadlineTasks.indeterminate = selectedCount > 0 && selectedCount < upcoming.length;
+      dom.selectAllTeamDeadlineTasks.disabled = upcoming.length === 0;
+    }
+    if (dom.remindSelectedTeamTasks) {
+      dom.remindSelectedTeamTasks.disabled = state.selectedDeadlineTaskIds.size === 0;
+    }
     if (!upcoming.length) {
       dom.teamDeadlineList.innerHTML =
         '<p class="team-deadline-empty">Chưa có công việc nhóm sắp đến hạn.</p>';
@@ -274,17 +294,108 @@
       const members = [...new Set(task.assignments
         .filter(assignment => assignment.member_id)
         .map(assignment => memberLabel(assignment.member_id)))];
-      return `<button type="button" class="team-deadline-item" data-team-deadline-task="${esc(task.task_id)}">
-        <span class="team-deadline-task-info">
-          <strong>${esc(task.task_title || task.submission_label || task.task_id)}</strong>
-          <small>${esc(groups.join(", ") || "Chưa phân nhóm")} · ${esc(members.join(", ") || "Chưa phân công")}</small>
-        </span>
-        <span class="team-deadline-task-due">
-          <strong>${esc(deadline(task))}</strong>
-          <small>${esc(STATUS[taskStatus(task)])}</small>
-        </span>
-      </button>`;
+      const taskId = String(task.task_id);
+      return `<div class="team-deadline-item">
+        <input type="checkbox" class="team-deadline-checkbox" data-select-deadline-task="${esc(taskId)}"
+          aria-label="Chọn ${esc(task.task_title || task.submission_label || task.task_id)}"
+          ${state.selectedDeadlineTaskIds.has(taskId) ? "checked" : ""}>
+        <button type="button" class="team-deadline-task-button" data-team-deadline-task="${esc(taskId)}">
+          <span class="team-deadline-task-info">
+            <strong>${esc(task.task_title || task.submission_label || task.task_id)}</strong>
+            <small>${esc(groups.join(", ") || "Chưa phân nhóm")} · ${esc(members.join(", ") || "Chưa phân công")}</small>
+          </span>
+          <span class="team-deadline-task-due">
+            <strong>${esc(deadline(task))}</strong>
+            <small>${esc(STATUS[taskStatus(task)])}</small>
+          </span>
+        </button>
+      </div>`;
     }).join("");
+  }
+
+  function setDeadlineFeedback(message, isError = false) {
+    if (!dom.teamDeadlineFeedback) return;
+    dom.teamDeadlineFeedback.textContent = message;
+    dom.teamDeadlineFeedback.hidden = !message;
+    dom.teamDeadlineFeedback.classList.toggle("is-error", isError);
+  }
+
+  async function remindSelectedTasks() {
+    const selectedIds = [...state.selectedDeadlineTaskIds];
+    if (!state.isTeamLeader || !selectedIds.length) return;
+
+    dom.remindSelectedTeamTasks.disabled = true;
+    setDeadlineFeedback("Đang gửi nhắc nhở...");
+    try {
+      const selectedTasks = state.tasks.filter(task =>
+        selectedIds.includes(String(task.task_id))
+      );
+      const memberIds = [...new Set(selectedTasks.flatMap(task =>
+        task.assignments.map(assignment => String(assignment.member_id || "")).filter(Boolean)
+      ))];
+      if (!memberIds.length) {
+        throw new Error("Các task đã chọn chưa có thành viên được phân công.");
+      }
+
+      const { data: memberships, error: membershipsError } = await state.db
+        .from("team_members")
+        .select("user_id, member_id")
+        .in("member_id", memberIds)
+        .not("user_id", "is", null);
+      if (membershipsError) throw membershipsError;
+
+      const usersByMember = new Map();
+      (memberships || []).forEach(membership => {
+        if (!membership.user_id || !membership.member_id) return;
+        const memberId = String(membership.member_id);
+        const users = usersByMember.get(memberId) || new Set();
+        users.add(String(membership.user_id));
+        usersByMember.set(memberId, users);
+      });
+
+      const batchId = window.crypto?.randomUUID?.() ||
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const notifications = [];
+      selectedTasks.forEach(task => {
+        const title = task.task_title || task.submission_label || task.task_id;
+        const assignedMemberIds = [...new Set(task.assignments
+          .map(assignment => String(assignment.member_id || ""))
+          .filter(Boolean))];
+        assignedMemberIds.forEach(memberId => {
+          (usersByMember.get(memberId) || []).forEach(userId => {
+            notifications.push({
+              user_id: userId,
+              member_id: memberId,
+              task_id: String(task.task_id),
+              title: "Trưởng nhóm nhắc công việc",
+              message: `${title} sắp đến hạn (${deadline(task)}).`,
+              type: "deadline_reminder",
+              priority: "normal",
+              dedupe_key: `leader_reminder:${batchId}:${task.task_id}:${userId}`
+            });
+          });
+        });
+      });
+
+      if (!notifications.length) {
+        throw new Error("Không tìm thấy tài khoản liên kết với thành viên được giao các task đã chọn.");
+      }
+      const { error: insertError } = await state.db
+        .from("notifications")
+        .insert(notifications);
+      if (insertError) throw insertError;
+
+      state.selectedDeadlineTaskIds.clear();
+      renderTeamDeadlines();
+      setDeadlineFeedback(`Đã gửi ${notifications.length} thông báo nhắc task đến thành viên được giao.`);
+    } catch (error) {
+      console.error("[task-list] Không thể gửi nhắc task:", error);
+      setDeadlineFeedback(`Không thể gửi nhắc task: ${error.message || "Lỗi không xác định."}`, true);
+    } finally {
+      if (dom.remindSelectedTeamTasks) {
+        dom.remindSelectedTeamTasks.disabled = state.selectedDeadlineTaskIds.size === 0;
+      }
+    }
   }
 
   function statusHTML(status, label = STATUS[status] || STATUS.not_started) {
@@ -599,8 +710,10 @@
         <h4>Thông tin chưa có trong database</h4>
         <p class="personal-note note-empty">Mức độ ưu tiên, người giao việc, phần trăm tiến độ, ghi chú và tệp đính kèm chưa có cột/bảng tương ứng trong schema hiện tại.</p>
       </section>`;
-    if (dom.updateButton) dom.updateButton.disabled = !state.memberId ||
-      !assignments.some(a => String(a.member_id) === String(state.memberId));
+    if (dom.updateButton) {
+      dom.updateButton.hidden = !state.isTeamLeader;
+      dom.updateButton.disabled = !state.isTeamLeader || assignments.length === 0;
+    }
   }
 
   function openDetail(taskId, navigation = "root") {
@@ -624,16 +737,12 @@
   async function saveProgress(event) {
     event.preventDefault();
     const task = state.selected;
-    if (!task || !state.memberId) {
-      alert("Không xác định được thành viên đang đăng nhập.");
+    if (!state.isTeamLeader) {
+      alert("Chỉ trưởng nhóm mới có thể cập nhật trạng thái trong Danh sách công việc.");
       return;
     }
-
-    const assignment = task.assignments.find(a =>
-      String(a.member_id) === String(state.memberId)
-    );
-    if (!assignment) {
-      alert("Bạn không được phân công vào công việc này.");
+    if (!task || !task.assignments?.length) {
+      alert("Công việc chưa có phân công để cập nhật trạng thái.");
       return;
     }
 
@@ -645,7 +754,6 @@
         is_done: isDone
       })
       .eq("task_id", task.task_id)
-      .eq("member_id", state.memberId)
       .select("task_id");
 
     if (error) {
@@ -665,15 +773,11 @@
 
   function openProgress() {
     const task = state.selected;
-    if (!task) return;
-    const assignment = task.assignments.find(a =>
-      String(a.member_id) === String(state.memberId)
-    );
-    if (!assignment) return;
+    if (!state.isTeamLeader || !task || !task.assignments?.length) return;
 
     text(dom.progressTitle, task.task_title || task.task_id);
-    text(dom.progressGroup, assignment.role || "—");
-    dom.status.value = assignmentStatus(assignment);
+    text(dom.progressGroup, `Tất cả ${task.assignments.length} phân công`);
+    dom.status.value = taskStatus(task);
     openModal(dom.progressModal);
   }
 
@@ -749,6 +853,38 @@
       const button = event.target.closest("[data-team-deadline-task]");
       if (button) openDetail(button.dataset.teamDeadlineTask);
     });
+    dom.teamDeadlineList?.addEventListener("change", event => {
+      const checkbox = event.target.closest("[data-select-deadline-task]");
+      if (!checkbox) return;
+      const taskId = checkbox.dataset.selectDeadlineTask;
+      if (checkbox.checked) state.selectedDeadlineTaskIds.add(taskId);
+      else state.selectedDeadlineTaskIds.delete(taskId);
+      setDeadlineFeedback("");
+      renderTeamDeadlines();
+    });
+    dom.teamDeadlineDays?.addEventListener("change", () => {
+      const inputValue = dom.teamDeadlineDays.value.trim();
+      const days = Number(inputValue);
+      if (!inputValue || !Number.isSafeInteger(days) || days < 0) {
+        dom.teamDeadlineDays.value = String(state.deadlineWindowDays);
+        return;
+      }
+      state.deadlineWindowDays = days;
+      state.selectedDeadlineTaskIds.clear();
+      setDeadlineFeedback("");
+      renderTeamDeadlines();
+    });
+    dom.selectAllTeamDeadlineTasks?.addEventListener("change", () => {
+      const upcomingIds = state.tasks
+        .filter(task => daysUntilDeadline(task) !== null)
+        .map(task => String(task.task_id));
+      state.selectedDeadlineTaskIds = dom.selectAllTeamDeadlineTasks.checked
+        ? new Set(upcomingIds)
+        : new Set();
+      setDeadlineFeedback("");
+      renderTeamDeadlines();
+    });
+    dom.remindSelectedTeamTasks?.addEventListener("click", remindSelectedTasks);
     dom.detail?.addEventListener("click", event => {
       if (event.target.closest("[data-back-task]")) {
         goBackToPreviousTask();
@@ -816,21 +952,19 @@
       if (error) throw error;
       const user = data.session?.user;
       if (CONFIG.memberId) state.memberId = String(CONFIG.memberId);
-      else {
-        state.memberId = user?.user_metadata?.member_id ||
-          user?.app_metadata?.member_id || user?.id || null;
-      }
 
       if (user) {
         const { data: membership, error: membershipError } = await state.db
           .from("team_members")
-          .select("account_role")
+          .select("member_id, account_role")
           .eq("user_id", user.id)
           .maybeSingle();
         if (membershipError) console.error("[task-list] Không thể tải vai trò tài khoản:", membershipError);
         const accountRole = String(membership?.account_role || user.app_metadata?.role || "")
           .trim().toLocaleLowerCase("vi");
         state.isTeamLeader = ["leader", "team_leader", "trưởng nhóm"].includes(accountRole);
+        state.memberId = state.memberId || membership?.member_id ||
+          user?.user_metadata?.member_id || user?.app_metadata?.member_id || null;
       }
       await loadData();
     } catch (error) {

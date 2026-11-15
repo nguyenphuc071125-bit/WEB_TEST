@@ -208,11 +208,28 @@
                 <span class="team-deadline-icon"><i data-lucide="calendar-clock"></i></span>
                 <div>
                     <h2 id="teamDeadlineHeading">Công việc nhóm sắp đến hạn</h2>
-                    <p>Công việc chưa hoàn thành có deadline trong hôm nay và 3 ngày tới.</p>
+                    <p>Công việc chưa hoàn thành có deadline trong <span id="teamDeadlineDaysLabel">3</span> ngày tới (tính cả hôm nay).</p>
                 </div>
                 <strong class="team-deadline-count" id="teamDeadlineCount">0</strong>
             </div>
+            <div class="team-deadline-controls">
+                <label class="team-deadline-range">
+                    <span>Lọc trong</span>
+                    <input id="teamDeadlineDays" type="number" min="0" step="1" value="3"
+                        aria-label="Lọc công việc sắp đến hạn trong bao nhiêu ngày">
+                    <span>ngày tới</span>
+                </label>
+                <label class="team-deadline-select-all">
+                    <input type="checkbox" id="selectAllTeamDeadlineTasks">
+                    <span>Chọn tất cả</span>
+                </label>
+                <button type="button" class="team-deadline-remind-btn" id="remindSelectedTeamTasks" disabled>
+                    <i data-lucide="bell"></i>
+                    <span>Nhắc task đã chọn</span>
+                </button>
+            </div>
             <div class="team-deadline-list" id="teamDeadlineList"></div>
+            <p class="team-deadline-feedback" id="teamDeadlineFeedback" role="status" aria-live="polite" hidden></p>
         </section>
 
 
@@ -458,7 +475,7 @@
                 </h2>
 
                 <p>
-                    Cập nhật trạng thái công việc được giao cho bạn.
+                    Trưởng nhóm cập nhật trạng thái cho tất cả phân công của công việc.
                 </p>
             </div>
 

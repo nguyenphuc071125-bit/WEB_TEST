@@ -17,6 +17,7 @@ const DOM = {
     sendButton: document.getElementById("sendButton"),
     quickActions: document.getElementById("quickActions"),
     noEventCard: document.querySelector(".no-event-card"),
+    createEventAction: document.querySelector(".event-card-action"),
     createEventModal: document.getElementById("createEventModal"),
     createEventForm: document.getElementById("createEventForm"),
     newEventName: document.getElementById("newEventName"),
@@ -75,6 +76,7 @@ async function loadUserInfo() {
         const user = await window.loadAppUser();
         if (!user) return;
         state.currentUser = user;
+        updateEventCreationAccess();
         const workspace = await window.ensurePersonalWorkspace(user);
         state.workspaceId = workspace.workspace_id;
         if (DOM.greetingName) DOM.greetingName.textContent = user.name;
@@ -501,6 +503,7 @@ function initializeQuickActions() {
         if (!card) return;
 
         if (card.classList.contains("no-event-card")) {
+            if (!canCreateEvent()) return;
             openCreateEventModal();
             return;
         }
@@ -512,8 +515,24 @@ function initializeQuickActions() {
     });
 }
 
+function canCreateEvent() {
+    const userRole = String(state.currentUser?.role || "").toLowerCase();
+    return userRole === "leader" || userRole.includes("trưởng nhóm");
+}
+
+function updateEventCreationAccess() {
+    const allowed = canCreateEvent();
+    if (DOM.noEventCard) {
+        DOM.noEventCard.disabled = !allowed;
+        DOM.noEventCard.setAttribute("aria-disabled", String(!allowed));
+    }
+    if (DOM.createEventAction) {
+        DOM.createEventAction.hidden = !allowed;
+    }
+}
+
 function openCreateEventModal() {
-    if (!DOM.createEventModal) return;
+    if (!canCreateEvent() || !DOM.createEventModal) return;
     DOM.createEventFeedback.textContent = "";
     DOM.createEventFeedback.classList.remove("is-error");
     DOM.createEventModal.hidden = false;
@@ -532,6 +551,11 @@ function closeCreateEventModal() {
 function initializeCreateEventModal() {
     DOM.createEventForm?.addEventListener("submit", async event => {
         event.preventDefault();
+        if (!canCreateEvent()) {
+            DOM.createEventFeedback.textContent = "Chỉ trưởng nhóm mới có thể tạo sự kiện.";
+            DOM.createEventFeedback.classList.add("is-error");
+            return;
+        }
         const eventName = DOM.newEventName.value.trim();
         const description = DOM.newEventDescription.value.trim();
         if (!eventName) {
@@ -682,8 +706,7 @@ function initializeKeyConfigButton() {
 function updateEventCardUI(event) {
     if (!event || !DOM.activeEventCard) return;
     const isCompleted = event.is_completed === true;
-    const userRole = String(state.currentUser?.role || "").toLowerCase();
-    const isLeader = userRole === "leader" || userRole.includes("trưởng nhóm");
+    const isLeader = canCreateEvent();
 
     if (DOM.activeEventName) {
         DOM.activeEventName.textContent = `${event.event_label} (${event.event_id})`;

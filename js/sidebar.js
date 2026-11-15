@@ -226,9 +226,16 @@ async function initializeAppNotificationCenter(user, container) {
         notifications = data || [];
         return notifications;
     };
-    const openPanel = () => {
+    const openPanel = async () => {
         panel.hidden = false;
         bell.setAttribute("aria-expanded", "true");
+        try {
+            await loadNotifications();
+            loadError = "";
+        } catch (error) {
+            console.error("Không thể làm mới thông báo:", error);
+            loadError = "Không thể tải thông báo mới. Hãy thử lại.";
+        }
         renderAppNotificationCenter(notifications, container, loadError);
     };
     const closePanel = () => {

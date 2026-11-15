@@ -138,9 +138,17 @@
                     <span class="team-deadline-icon"><i data-lucide="calendar-clock"></i></span>
                     <div>
                         <h2 id="teamUpcomingTaskAlertTitle">Công việc sắp đến hạn</h2>
-                        <p>Công việc chưa hoàn thành có deadline trong hôm nay và 3 ngày tới.</p>
+                        <p>Công việc chưa hoàn thành có deadline trong <span id="teamUpcomingTaskDaysLabel">3</span> ngày tới (tính cả hôm nay).</p>
                     </div>
                     <strong class="team-deadline-count" id="teamUpcomingTaskAlertCount">0</strong>
+                </div>
+                <div class="team-deadline-controls">
+                    <label class="team-deadline-range">
+                        <span>Lọc trong</span>
+                        <input id="teamUpcomingTaskDays" type="number" min="0" step="1" value="3"
+                            aria-label="Lọc công việc sắp đến hạn trong bao nhiêu ngày">
+                        <span>ngày tới</span>
+                    </label>
                 </div>
                 <div class="team-deadline-list" id="teamUpcomingTaskAlertList"></div>
             </section>

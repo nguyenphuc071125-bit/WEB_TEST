@@ -19,7 +19,8 @@ const state = {
     isTeamLeader: false,
     keyword: "",
     group: "",
-    page: 1
+    page: 1,
+    deadlineWindowDays: 3
 };
 
 const el = {
@@ -38,7 +39,9 @@ const el = {
     upcomingAlertList: document.getElementById("upcomingTaskAlertList"),
     teamUpcomingAlert: document.getElementById("teamUpcomingTaskAlert"),
     teamUpcomingAlertCount: document.getElementById("teamUpcomingTaskAlertCount"),
-    teamUpcomingAlertList: document.getElementById("teamUpcomingTaskAlertList")
+    teamUpcomingAlertList: document.getElementById("teamUpcomingTaskAlertList"),
+    teamUpcomingDays: document.getElementById("teamUpcomingTaskDays"),
+    teamUpcomingDaysLabel: document.getElementById("teamUpcomingTaskDaysLabel")
 };
 
 function escapeHTML(value = "") {
@@ -83,7 +86,7 @@ function getOverdueDays(task, now = new Date()) {
     return Math.max(1, Math.ceil((now - deadline) / 86400000));
 }
 
-function getUpcomingDays(task, now = new Date()) {
+function getUpcomingDays(task, now = new Date(), windowDays = state.deadlineWindowDays) {
     if (task.status === "completed" || task.overallStatus === "completed" ||
         task.isCancelled || !task.deadline) return null;
 
@@ -97,7 +100,7 @@ function getUpcomingDays(task, now = new Date()) {
             due.getUTCDate() !== day) return null;
         const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
         const daysUntil = Math.floor((dueDate - today) / 86400000);
-        return daysUntil >= 0 && daysUntil <= 3 ? daysUntil : null;
+        return daysUntil >= 0 && daysUntil <= windowDays ? daysUntil : null;
     }
 
     const deadline = new Date(deadlineValue);
@@ -105,7 +108,7 @@ function getUpcomingDays(task, now = new Date()) {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const dueDay = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
     const daysUntil = Math.floor((dueDay - today) / 86400000);
-    return daysUntil >= 0 && daysUntil <= 3 ? daysUntil : null;
+    return daysUntil >= 0 && daysUntil <= windowDays ? daysUntil : null;
 }
 
 function renderUpcomingTaskAlert() {
@@ -121,7 +124,7 @@ function renderUpcomingTaskAlert() {
     if (!state.isTeamLeader || !upcomingTasks.length) return;
 
     el.upcomingAlertSummary.textContent =
-        `Có ${upcomingTasks.length} công việc đến hạn trong 3 ngày tới (tính cả hôm nay).`;
+        `Có ${upcomingTasks.length} công việc đến hạn trong ${state.deadlineWindowDays} ngày tới (tính cả hôm nay).`;
     el.upcomingAlertList.innerHTML = upcomingTasks.map(({ task, daysUntil }) => {
         const dueLabel = daysUntil === 0
             ? "Đến hạn hôm nay"
@@ -173,6 +176,10 @@ function renderTeamUpcomingTaskAlert() {
         .sort((a, b) => a.daysUntil - b.daysUntil ||
             new Date(a.task.deadline) - new Date(b.task.deadline));
 
+    if (el.teamUpcomingDays) el.teamUpcomingDays.value = String(state.deadlineWindowDays);
+    if (el.teamUpcomingDaysLabel) {
+        el.teamUpcomingDaysLabel.textContent = String(state.deadlineWindowDays);
+    }
     el.teamUpcomingAlertCount.textContent = String(upcomingTasks.length);
     if (!upcomingTasks.length) {
         el.teamUpcomingAlertList.innerHTML =
@@ -943,7 +950,11 @@ function renderTaskDetail(task) {
     `;
 
     const statusInput = document.getElementById("taskStatusInput");
-    if (statusInput) statusInput.value = detailStatus;
+    if (statusInput) {
+        statusInput.value = detailStatus;
+        const completedOption = statusInput.querySelector('option[value="completed"]');
+        if (completedOption) completedOption.hidden = !state.isTeamLeader;
+    }
     document.getElementById("progressTaskTitle").textContent = task.title;
     document.getElementById("progressTaskGroup").textContent = task.group || "—";
 
@@ -951,7 +962,7 @@ function renderTaskDetail(task) {
         !hasAssignment || task.status !== "not_started";
 
     document.getElementById("completeTaskBtn").hidden =
-        !hasAssignment || task.status === "completed";
+        !state.isTeamLeader || !hasAssignment || task.overallStatus === "completed";
     document.querySelector(".task-detail-footer").hidden = !hasAssignment;
 
     refreshIcons();
@@ -1157,6 +1168,10 @@ async function submitProgress(event) {
 
 async function markTaskComplete() {
     if (!state.selectedTask) return;
+    if (!state.isTeamLeader) {
+        alert("Chỉ trưởng nhóm mới có thể đánh dấu công việc hoàn thành.");
+        return;
+    }
 
     const button = document.getElementById("completeTaskBtn");
 
@@ -1204,15 +1219,21 @@ async function updateTaskStatus(status) {
         throw new Error("Không xác định được thành viên hoặc công việc.");
     }
 
-    const { data, error } = await state.db
+    if (status === "completed" && !state.isTeamLeader) {
+        throw new Error("Chỉ trưởng nhóm mới có thể đánh dấu công việc hoàn thành.");
+    }
+
+    let updateQuery = state.db
         .from("task_assignments")
         .update({
             assignment_state: status,
             is_done: status === "completed"
         })
-        .eq("task_id", state.selectedTask.id)
-        .eq("member_id", state.memberId)
-        .select("task_id");
+        .eq("task_id", state.selectedTask.id);
+    if (!(state.isTeamLeader && status === "completed")) {
+        updateQuery = updateQuery.eq("member_id", state.memberId);
+    }
+    const { data, error } = await updateQuery.select("task_id");
 
     if (error) throw error;
     if (!data?.length) {
@@ -1401,6 +1422,18 @@ document.getElementById("groupFilter")
         applyFilters();
 
     });
+
+el.teamUpcomingDays?.addEventListener("change", event => {
+    const inputValue = event.target.value.trim();
+    const days = Number(inputValue);
+    if (!inputValue || !Number.isSafeInteger(days) || days < 0) {
+        event.target.value = String(state.deadlineWindowDays);
+        return;
+    }
+    state.deadlineWindowDays = days;
+    renderUpcomingTaskAlert();
+    renderTeamUpcomingTaskAlert();
+});
 
 
 document.getElementById("resetTaskFilters")

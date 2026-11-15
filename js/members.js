@@ -21,6 +21,7 @@ let currentWorkspace = null;
 let currentUserCanManageWorkspace = false;
 let workspaceMemberRemovalReady = false;
 let currentWorkspaceMemberIds = new Set();
+let removedWorkspaceMembers = [];
 let currentUser = null;
 let searchKeyword = "";
 let isLoading = false;
@@ -52,6 +53,8 @@ const DOM = {
 
     openAddButton: document.getElementById("openAddMember"),
 
+    restoreButton: document.getElementById("restoreWorkspaceMember"),
+
     addModal: document.getElementById("addMemberModal"),
 
     updateModal: document.getElementById("updateMemberModal"),
@@ -75,6 +78,9 @@ const DOM = {
 
 if (DOM.openAddButton) {
     DOM.openAddButton.hidden = true;
+}
+if (DOM.restoreButton) {
+    DOM.restoreButton.hidden = true;
 }
 
 
@@ -121,6 +127,8 @@ async function loadMemberProfiles() {
 
 async function loadMembers() {
     showLoading();
+    removedWorkspaceMembers = [];
+    updateRestoreButtonVisibility();
 
     try {
         const { data: sessionData, error: sessionError } =
@@ -196,7 +204,7 @@ async function loadMembers() {
         });
 
         await loadWorkspaceInvitations(user);
-        members = members.filter(member => {
+        const workspaceMembers = members.filter(member => {
             if (member.removedFromWorkspace) return false;
             const belongsToWorkspace = currentWorkspace?.workspace_id &&
                 String(member.workspaceId) === String(currentWorkspace.workspace_id);
@@ -205,12 +213,37 @@ async function loadMembers() {
                 String(currentAccountMemberId) === String(member.id);
             return belongsToWorkspace || hasLegacyWorkspaceLink || isCurrentMember;
         });
+        const allWorkspaceProfiles = (membersResult.data || [])
+            .map(member => ({
+                id: member.member_id,
+                workspaceId: member.workspace_id || null,
+                email: member.email || "",
+                removedFromWorkspace: Boolean(member.removed_from_workspace_at)
+            }))
+            .filter(member =>
+                member.removedFromWorkspace &&
+                currentWorkspace?.workspace_id &&
+                String(member.workspaceId) === String(currentWorkspace.workspace_id)
+            );
+        removedWorkspaceMembers = allWorkspaceProfiles;
+        members = workspaceMembers;
+        updateRestoreButtonVisibility();
         renderMembers();
         updateMemberCounts();
     } catch (error) {
         console.error("Không thể tải danh sách thành viên:", error);
+        removedWorkspaceMembers = [];
+        updateRestoreButtonVisibility();
         showError("Không thể tải danh sách thành viên.");
     }
+}
+
+function updateRestoreButtonVisibility() {
+    if (!DOM.restoreButton) return;
+    DOM.restoreButton.hidden = !(
+        workspaceMemberRemovalReady &&
+        currentUserCanManageWorkspace
+    );
 }
 
 function invitationStatusLabel(status) {
@@ -286,6 +319,7 @@ async function loadWorkspaceInvitations(user) {
     if (!user?.id) {
         currentWorkspace = null;
         if (DOM.openAddButton) DOM.openAddButton.hidden = true;
+        if (DOM.restoreButton) DOM.restoreButton.hidden = true;
         currentWorkspaceMemberIds = new Set();
         showLoadError("Cần đăng nhập để tải lời mời workspace.");
         return;
@@ -354,6 +388,7 @@ async function loadWorkspaceInvitations(user) {
         if (DOM.openAddButton) {
             DOM.openAddButton.hidden = !currentUserCanManageWorkspace;
         }
+        updateRestoreButtonVisibility();
 
         renderWorkspaceInvitations(
             DOM.outgoingInvitations,
@@ -371,6 +406,7 @@ async function loadWorkspaceInvitations(user) {
         currentUserCanManageWorkspace = false;
         currentWorkspaceMemberIds = new Set();
         if (DOM.openAddButton) DOM.openAddButton.hidden = true;
+        if (DOM.restoreButton) DOM.restoreButton.hidden = true;
         showLoadError("Không thể tải lời mời. Vui lòng kiểm tra quyền truy cập Supabase.");
     }
 }
@@ -1471,6 +1507,11 @@ document.addEventListener("click", event => {
         removeWorkspaceMember(removeMemberButton.dataset.id, removeMemberButton);
     }
 
+    const restoreButton = event.target.closest("#restoreWorkspaceMember");
+    if (restoreButton) {
+        restoreWorkspaceMember(restoreButton);
+    }
+
 
     // Đóng modal
     const closeButton = event.target.closest(
@@ -1536,6 +1577,67 @@ async function removeWorkspaceMember(memberId, button) {
         if (button.isConnected) {
             button.disabled = false;
             button.textContent = "Xóa thành viên";
+        }
+    }
+}
+
+async function restoreWorkspaceMember(button) {
+    if (!currentUserCanManageWorkspace || !workspaceMemberRemovalReady) {
+        window.alert("Chỉ trưởng nhóm mới có thể khôi phục thành viên.");
+        return;
+    }
+
+    const suggestedEmail = removedWorkspaceMembers.length === 1
+        ? removedWorkspaceMembers[0].email
+        : "";
+    const email = window.prompt(
+        "Nhập email đăng nhập của thành viên cần khôi phục:",
+        suggestedEmail
+    );
+    if (!email?.trim()) return;
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!window.confirm(`Khôi phục ${normalizedEmail} vào workspace với vai trò Thành viên?`)) {
+        return;
+    }
+
+    button.disabled = true;
+    const originalContent = button.innerHTML;
+    button.textContent = "Đang khôi phục…";
+    try {
+        if (!window.supabaseClient?.functions?.invoke) {
+            throw new Error("Supabase client chưa hỗ trợ gọi Edge Function.");
+        }
+        const { data, error } = await window.supabaseClient.functions.invoke(
+            "restore-workspace-member",
+            { body: { email: normalizedEmail } }
+        );
+        if (error) {
+            if (error.context instanceof Response) {
+                const response = await error.context.clone().json().catch(() => null);
+                if (typeof response?.error === "string") {
+                    throw new Error(response.error);
+                }
+            }
+            throw error;
+        }
+        if (
+            !data?.memberId ||
+            data.workspaceId !== currentWorkspace?.workspace_id
+        ) {
+            throw new Error("Edge Function không trả về thông tin khôi phục hợp lệ.");
+        }
+
+        await loadMembers();
+        window.alert("Đã khôi phục thành viên với vai trò Thành viên.");
+    } catch (error) {
+        console.error("Không thể khôi phục thành viên:", error);
+        window.alert(`Không thể khôi phục thành viên: ${error.message || "Lỗi không xác định."}`);
+    } finally {
+        if (button.isConnected) {
+            button.disabled = false;
+            button.innerHTML = originalContent;
+            refreshIcons();
         }
     }
 }

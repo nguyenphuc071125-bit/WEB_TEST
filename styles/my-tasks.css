@@ -390,6 +390,32 @@ button.stat-card {
     font-size: 11px;
 }
 
+.team-deadline-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 0 4px;
+}
+
+.team-deadline-range {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #806B43;
+    font-size: 11px;
+}
+
+.team-deadline-range input[type="number"] {
+    width: 76px;
+    min-height: 34px;
+    padding: 0 9px;
+    border: 1px solid #F3E4BE;
+    border-radius: 7px;
+    background: var(--white);
+    color: var(--text-primary);
+}
+
 .team-deadline-list {
     display: grid;
     gap: 7px;
@@ -1115,6 +1141,7 @@ button.stat-card {
     .team-deadline-alert { padding: 12px 10px; }
     .team-deadline-item { align-items: flex-start; flex-direction: column; gap: 7px; }
     .team-deadline-task-due { align-items: flex-start; text-align: left; }
+    .team-deadline-controls { flex-wrap: wrap; }
     .progress-form-grid, .task-meta-grid { grid-template-columns: 1fr; }
     .detail-footer-row { grid-template-columns: 1fr; }
     .table-footer { align-items: flex-start; flex-direction: column; padding: 10px 13px; }

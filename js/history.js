@@ -417,36 +417,52 @@
         if (!state.db?.from) throw new Error("Không tìm thấy kết nối Supabase.");
 
         dom.list.innerHTML = '<div class="history-message">Đang tải dữ liệu từ Supabase...</div>';
-        const [eventsResult, tasksResult, assignmentsResult, membersResult] = await Promise.all([
-            state.db.from("events").select(
-                "event_id, event_label, event_category, category_note, n_tasks, first_on_air_date, last_on_air_date, is_completed"
-            ),
-            state.db.from("tasks").select(
-                "task_id, event_id, task_no, task_title, submission_label, description, package_deadline_date, package_deadline_time, is_cancelled"
-            ),
-            state.db.from("task_assignments").select(
-                "task_id, role, assignment_state, member_id, is_done"
-            ),
-            state.db.from("members").select("member_id, member_label, email")
-        ]);
+        const eventsResult = await state.db.from("events").select(
+            "event_id, event_label, event_category, category_note, n_tasks, first_on_air_date, last_on_air_date, is_completed"
+        )
+            .eq("is_completed", true);
+        if (eventsResult.error) throw eventsResult.error;
 
-        for (const result of [eventsResult, tasksResult, assignmentsResult, membersResult]) {
-            if (result.error) throw result.error;
-        }
+        const events = eventsResult.data || [];
+        const eventIds = events.map(event => event.event_id).filter(Boolean);
+        const tasksResult = eventIds.length
+            ? await state.db.from("tasks").select(
+                "task_id, event_id, task_no, task_title, submission_label, description, package_deadline_date, package_deadline_time, is_cancelled"
+            ).in("event_id", eventIds)
+            : { data: [], error: null };
+        if (tasksResult.error) throw tasksResult.error;
 
         const tasks = tasksResult.data || [];
         const taskIds = tasks.map(task => task.task_id).filter(Boolean);
+        let assignments = [];
         let attachments = [];
         if (taskIds.length) {
-            const attachmentsResult = await state.db.from("task_attachments")
-                .select("attachment_id, task_id, file_name, file_url, file_type, file_size, uploaded_by, created_at")
-                .in("task_id", taskIds)
-                .order("created_at", { ascending: false });
+            const [assignmentsResult, attachmentsResult] = await Promise.all([
+                state.db.from("task_assignments")
+                    .select("task_id, role, assignment_state, member_id, is_done")
+                    .in("task_id", taskIds),
+                state.db.from("task_attachments")
+                    .select("attachment_id, task_id, file_name, file_url, file_type, file_size, uploaded_by, created_at")
+                    .in("task_id", taskIds)
+                    .order("created_at", { ascending: false })
+            ]);
+            if (assignmentsResult.error) throw assignmentsResult.error;
             if (attachmentsResult.error) throw attachmentsResult.error;
+            assignments = assignmentsResult.data || [];
             attachments = attachmentsResult.data || [];
         }
 
-        state.events = eventsResult.data || [];
+        const memberIds = [...new Set(assignments
+            .map(assignment => assignment.member_id)
+            .filter(Boolean))];
+        const membersResult = memberIds.length
+            ? await state.db.from("members")
+                .select("member_id, member_label, email")
+                .in("member_id", memberIds)
+            : { data: [], error: null };
+        if (membersResult.error) throw membersResult.error;
+
+        state.events = events;
         state.memberNames = new Map((membersResult.data || []).map(member =>
             [String(member.member_id), member.member_label || String(member.member_id)]
         ));
@@ -455,7 +471,7 @@
         ));
 
         const assignmentsByTask = new Map();
-        (assignmentsResult.data || []).forEach(assignment => {
+        assignments.forEach(assignment => {
             const taskId = String(assignment.task_id);
             if (!assignmentsByTask.has(taskId)) assignmentsByTask.set(taskId, []);
             assignmentsByTask.get(taskId).push(assignment);

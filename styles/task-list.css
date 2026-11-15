@@ -407,11 +407,9 @@ button.summary-card {
     width: 100%;
     min-width: 0;
     align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 9px 11px;
+    gap: 10px;
+    padding: 6px 9px;
     color: var(--text-primary);
-    text-align: left;
     background: #fff;
     border: 1px solid #F3E4BE;
     border-radius: 8px;
@@ -424,9 +422,101 @@ button.summary-card {
     box-shadow: var(--shadow-sm);
 }
 
-.team-deadline-item:focus-visible {
+.team-deadline-item:focus-within {
     outline: 3px solid rgba(154, 106, 19, .2);
     outline-offset: 2px;
+}
+
+.team-deadline-checkbox {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    accent-color: var(--primary);
+}
+
+.team-deadline-task-button {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 3px 2px;
+    color: inherit;
+    text-align: left;
+    background: transparent;
+    border: 0;
+}
+
+.team-deadline-task-button:focus-visible {
+    outline: none;
+}
+
+.team-deadline-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 10px;
+    padding: 0 4px;
+}
+
+.team-deadline-range,
+.team-deadline-select-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #806B43;
+    font-size: 11px;
+}
+
+.team-deadline-range input[type="number"] {
+    width: 76px;
+    min-height: 34px;
+    padding: 0 9px;
+    color: var(--text-primary);
+    background: #fff;
+    border: 1px solid #F3E4BE;
+    border-radius: 7px;
+}
+
+.team-deadline-select-all input {
+    width: 15px;
+    height: 15px;
+    accent-color: var(--primary);
+}
+
+.team-deadline-remind-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 34px;
+    margin-left: auto;
+    padding: 0 11px;
+    color: #fff;
+    background: var(--primary);
+    border: 0;
+    border-radius: 7px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.team-deadline-remind-btn:hover:not(:disabled) {
+    background: var(--primary-dark);
+}
+
+.team-deadline-remind-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
+.team-deadline-feedback {
+    margin: 8px 4px 0;
+    color: var(--success);
+    font-size: 11px;
+}
+
+.team-deadline-feedback.is-error {
+    color: var(--danger);
 }
 
 .team-deadline-task-info,
@@ -2293,13 +2383,20 @@ button.summary-card {
 
     .team-deadline-item {
         align-items: flex-start;
-        flex-direction: column;
-        gap: 7px;
     }
 
     .team-deadline-task-due {
         align-items: flex-start;
         text-align: left;
+    }
+
+    .team-deadline-controls {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .team-deadline-remind-btn {
+        margin-left: 0;
     }
 
     .main-content {
