@@ -21,7 +21,6 @@ let currentWorkspace = null;
 let currentUserCanManageWorkspace = false;
 let workspaceMemberRemovalReady = false;
 let currentWorkspaceMemberIds = new Set();
-let removedWorkspaceMembers = [];
 let currentUser = null;
 let searchKeyword = "";
 let isLoading = false;
@@ -53,8 +52,6 @@ const DOM = {
 
     openAddButton: document.getElementById("openAddMember"),
 
-    restoreButton: document.getElementById("restoreWorkspaceMember"),
-
     addModal: document.getElementById("addMemberModal"),
 
     updateModal: document.getElementById("updateMemberModal"),
@@ -73,17 +70,30 @@ const DOM = {
 
     detailContent: document.getElementById("memberDetailContent"),
 
-    closeDetail: document.getElementById("closeDetailPanel")
+    closeDetail: document.getElementById("closeDetailPanel"),
+
+    removeConfirmModal: document.getElementById("removeMemberConfirmModal"),
+
+    removeConfirmTitle: document.getElementById("removeMemberConfirmTitle"),
+
+    removeConfirmStepOne: document.getElementById("removeMemberConfirmStepOne"),
+
+    removeConfirmStepTwo: document.getElementById("removeMemberConfirmStepTwo"),
+
+    removeConfirmName: document.getElementById("removeMemberConfirmName"),
+
+    removeConfirmNameFinal: document.getElementById("removeMemberConfirmNameFinal"),
+
+    continueMemberRemoval: document.getElementById("continueMemberRemoval"),
+
+    confirmMemberRemoval: document.getElementById("confirmMemberRemoval")
 };
+
+let pendingMemberRemoval = null;
 
 if (DOM.openAddButton) {
     DOM.openAddButton.hidden = true;
 }
-if (DOM.restoreButton) {
-    DOM.restoreButton.hidden = true;
-}
-
-
 /* =====================================================
    4. LOAD MEMBERS FROM DATABASE
 ===================================================== */
@@ -127,8 +137,6 @@ async function loadMemberProfiles() {
 
 async function loadMembers() {
     showLoading();
-    removedWorkspaceMembers = [];
-    updateRestoreButtonVisibility();
 
     try {
         const { data: sessionData, error: sessionError } =
@@ -213,37 +221,13 @@ async function loadMembers() {
                 String(currentAccountMemberId) === String(member.id);
             return belongsToWorkspace || hasLegacyWorkspaceLink || isCurrentMember;
         });
-        const allWorkspaceProfiles = (membersResult.data || [])
-            .map(member => ({
-                id: member.member_id,
-                workspaceId: member.workspace_id || null,
-                email: member.email || "",
-                removedFromWorkspace: Boolean(member.removed_from_workspace_at)
-            }))
-            .filter(member =>
-                member.removedFromWorkspace &&
-                currentWorkspace?.workspace_id &&
-                String(member.workspaceId) === String(currentWorkspace.workspace_id)
-            );
-        removedWorkspaceMembers = allWorkspaceProfiles;
         members = workspaceMembers;
-        updateRestoreButtonVisibility();
         renderMembers();
         updateMemberCounts();
     } catch (error) {
         console.error("Không thể tải danh sách thành viên:", error);
-        removedWorkspaceMembers = [];
-        updateRestoreButtonVisibility();
         showError("Không thể tải danh sách thành viên.");
     }
-}
-
-function updateRestoreButtonVisibility() {
-    if (!DOM.restoreButton) return;
-    DOM.restoreButton.hidden = !(
-        workspaceMemberRemovalReady &&
-        currentUserCanManageWorkspace
-    );
 }
 
 function invitationStatusLabel(status) {
@@ -319,7 +303,6 @@ async function loadWorkspaceInvitations(user) {
     if (!user?.id) {
         currentWorkspace = null;
         if (DOM.openAddButton) DOM.openAddButton.hidden = true;
-        if (DOM.restoreButton) DOM.restoreButton.hidden = true;
         currentWorkspaceMemberIds = new Set();
         showLoadError("Cần đăng nhập để tải lời mời workspace.");
         return;
@@ -388,7 +371,6 @@ async function loadWorkspaceInvitations(user) {
         if (DOM.openAddButton) {
             DOM.openAddButton.hidden = !currentUserCanManageWorkspace;
         }
-        updateRestoreButtonVisibility();
 
         renderWorkspaceInvitations(
             DOM.outgoingInvitations,
@@ -406,7 +388,6 @@ async function loadWorkspaceInvitations(user) {
         currentUserCanManageWorkspace = false;
         currentWorkspaceMemberIds = new Set();
         if (DOM.openAddButton) DOM.openAddButton.hidden = true;
-        if (DOM.restoreButton) DOM.restoreButton.hidden = true;
         showLoadError("Không thể tải lời mời. Vui lòng kiểm tra quyền truy cập Supabase.");
     }
 }
@@ -1504,14 +1485,12 @@ document.addEventListener("click", event => {
 
     const removeMemberButton = event.target.closest("#removeMemberFromWorkspace");
     if (removeMemberButton) {
-        removeWorkspaceMember(removeMemberButton.dataset.id, removeMemberButton);
+        openRemoveMemberConfirmation(removeMemberButton.dataset.id, removeMemberButton);
     }
 
-    const restoreButton = event.target.closest("#restoreWorkspaceMember");
-    if (restoreButton) {
-        restoreWorkspaceMember(restoreButton);
+    if (event.target.closest("#cancelMemberRemoval")) {
+        pendingMemberRemoval = null;
     }
-
 
     // Đóng modal
     const closeButton = event.target.closest(
@@ -1531,14 +1510,15 @@ document.addEventListener("click", event => {
 
     // Nhấn ra ngoài modal để đóng
     if (event.target.classList.contains("modal-overlay")) {
-
         event.target.hidden = true;
-
+        if (event.target === DOM.removeConfirmModal) {
+            pendingMemberRemoval = null;
+        }
     }
 
 });
 
-async function removeWorkspaceMember(memberId, button) {
+function openRemoveMemberConfirmation(memberId, button) {
     const member = members.find(item => String(item.id) === String(memberId));
     if (!member) {
         window.alert("Không tìm thấy thành viên cần xóa.");
@@ -1553,10 +1533,38 @@ async function removeWorkspaceMember(memberId, button) {
         return;
     }
 
-    const confirmed = window.confirm(
-        `Xóa ${member.name || "thành viên này"} khỏi workspace? Tài khoản và lịch sử công việc sẽ được giữ lại.`
-    );
-    if (!confirmed) return;
+    pendingMemberRemoval = { memberId, button };
+    const memberName = member.name || "thành viên này";
+    DOM.removeConfirmName.textContent = memberName;
+    DOM.removeConfirmNameFinal.textContent = memberName;
+    DOM.removeConfirmStepOne.hidden = false;
+    DOM.removeConfirmStepTwo.hidden = true;
+    DOM.continueMemberRemoval.hidden = false;
+    DOM.confirmMemberRemoval.hidden = true;
+    DOM.removeConfirmTitle.textContent = "Xác nhận xóa thành viên";
+    DOM.removeConfirmModal.hidden = false;
+}
+
+DOM.continueMemberRemoval?.addEventListener("click", () => {
+    if (!pendingMemberRemoval) return;
+    DOM.removeConfirmStepOne.hidden = true;
+    DOM.removeConfirmStepTwo.hidden = false;
+    DOM.continueMemberRemoval.hidden = true;
+    DOM.confirmMemberRemoval.hidden = false;
+    DOM.removeConfirmTitle.textContent = "Xác nhận xóa lần cuối";
+});
+
+DOM.confirmMemberRemoval?.addEventListener("click", async () => {
+    if (!pendingMemberRemoval) return;
+    const { memberId, button } = pendingMemberRemoval;
+    pendingMemberRemoval = null;
+    DOM.removeConfirmModal.hidden = true;
+    await removeWorkspaceMember(memberId, button);
+});
+
+async function removeWorkspaceMember(memberId, button) {
+    const member = members.find(item => String(item.id) === String(memberId));
+    if (!member) return;
 
     button.disabled = true;
     button.textContent = "Đang xóa…";
@@ -1580,68 +1588,6 @@ async function removeWorkspaceMember(memberId, button) {
         }
     }
 }
-
-async function restoreWorkspaceMember(button) {
-    if (!currentUserCanManageWorkspace || !workspaceMemberRemovalReady) {
-        window.alert("Chỉ trưởng nhóm mới có thể khôi phục thành viên.");
-        return;
-    }
-
-    const suggestedEmail = removedWorkspaceMembers.length === 1
-        ? removedWorkspaceMembers[0].email
-        : "";
-    const email = window.prompt(
-        "Nhập email đăng nhập của thành viên cần khôi phục:",
-        suggestedEmail
-    );
-    if (!email?.trim()) return;
-
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!window.confirm(`Khôi phục ${normalizedEmail} vào workspace với vai trò Thành viên?`)) {
-        return;
-    }
-
-    button.disabled = true;
-    const originalContent = button.innerHTML;
-    button.textContent = "Đang khôi phục…";
-    try {
-        if (!window.supabaseClient?.functions?.invoke) {
-            throw new Error("Supabase client chưa hỗ trợ gọi Edge Function.");
-        }
-        const { data, error } = await window.supabaseClient.functions.invoke(
-            "restore-workspace-member",
-            { body: { email: normalizedEmail } }
-        );
-        if (error) {
-            if (error.context instanceof Response) {
-                const response = await error.context.clone().json().catch(() => null);
-                if (typeof response?.error === "string") {
-                    throw new Error(response.error);
-                }
-            }
-            throw error;
-        }
-        if (
-            !data?.memberId ||
-            data.workspaceId !== currentWorkspace?.workspace_id
-        ) {
-            throw new Error("Edge Function không trả về thông tin khôi phục hợp lệ.");
-        }
-
-        await loadMembers();
-        window.alert("Đã khôi phục thành viên với vai trò Thành viên.");
-    } catch (error) {
-        console.error("Không thể khôi phục thành viên:", error);
-        window.alert(`Không thể khôi phục thành viên: ${error.message || "Lỗi không xác định."}`);
-    } finally {
-        if (button.isConnected) {
-            button.disabled = false;
-            button.innerHTML = originalContent;
-            refreshIcons();
-        }
-    }
-}
-
 
 /* =====================================================
    14. CREATE WORKSPACE MEMBER ACCOUNT

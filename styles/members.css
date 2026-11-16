@@ -1736,3 +1736,52 @@ button {
 .workspace-invitation-feedback.is-success {
     color: #067647;
 }
+
+.remove-member-confirm-modal {
+    max-width: 440px;
+}
+
+.remove-member-confirm-modal .modal-header {
+    margin-bottom: 12px;
+}
+
+.remove-member-confirm-modal .modal-header p {
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.remove-member-warning {
+    padding: 12px 14px;
+    border: 1px solid #FDA29B;
+    border-radius: 8px;
+    background: #FEF3F2;
+    color: #B42318 !important;
+}
+
+.remove-member-confirm-modal .modal-actions {
+    margin-top: 12px;
+}
+
+.delete-member-confirm-btn {
+    min-width: 95px;
+    height: 38px;
+    padding: 0 15px;
+    border: 1px solid #B42318;
+    border-radius: 7px;
+    background: #B42318;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.delete-member-confirm-btn:hover {
+    border-color: #912018;
+    background: #912018;
+}
+
+.delete-member-confirm-btn:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}

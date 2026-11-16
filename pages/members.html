@@ -83,16 +83,6 @@
                         Thêm thành viên
                     </button>
 
-                    <button
-                        type="button"
-                        class="add-member-btn"
-                        id="restoreWorkspaceMember"
-                        hidden
-                    >
-                        <i data-lucide="rotate-ccw"></i>
-                        Khôi phục thành viên
-                    </button>
-
                 </div>
 
             </header>
@@ -564,6 +554,45 @@
     </div>
 </div>
 
+
+    <!-- REMOVE MEMBER CONFIRMATION -->
+    <div
+        class="modal-overlay"
+        id="removeMemberConfirmModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="removeMemberConfirmTitle"
+        hidden
+    >
+        <div class="modal-container remove-member-confirm-modal">
+            <div class="modal-header">
+                <div>
+                    <h2 id="removeMemberConfirmTitle">Xác nhận xóa thành viên</h2>
+                    <p id="removeMemberConfirmStepOne">
+                        Bạn có chắc muốn xóa <strong id="removeMemberConfirmName"></strong> khỏi workspace?
+                    </p>
+                    <p id="removeMemberConfirmStepTwo" hidden>
+                        Đây là xác nhận cuối cùng để xóa <strong id="removeMemberConfirmNameFinal"></strong> khỏi workspace.
+                    </p>
+                    <p class="remove-member-warning">
+                        <strong>Không thể khôi phục</strong> sau khi xóa. Tài khoản và lịch sử công việc vẫn được giữ lại.
+                    </p>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="cancel-btn" id="cancelMemberRemoval">
+                    Hủy
+                </button>
+                <button type="button" class="save-btn" id="continueMemberRemoval">
+                    Tiếp tục
+                </button>
+                <button type="button" class="delete-member-confirm-btn" id="confirmMemberRemoval" hidden>
+                    Xóa thành viên
+                </button>
+            </div>
+        </div>
+    </div>
 
 
     <!-- ==============================
