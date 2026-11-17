@@ -1221,6 +1221,10 @@ body {
     background: #ffffff;
 }
 
+body:has(.chat-panel) .ace-chatbot-widget {
+    bottom: calc(104px + env(safe-area-inset-bottom, 0px));
+}
+
 .chat-panel-header {
     min-height: 43px;
     padding: 8px 13px;

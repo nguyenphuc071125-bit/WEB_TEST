@@ -1072,7 +1072,7 @@
    RESPONSIVE
 ========================================= */
 
-@media (max-width: 768px) {
+@media (max-width: 840px) {
 
     :root {
         --sidebar-width: 72px;
