@@ -42,6 +42,7 @@
 
         "Lịch sử sự kiện | AECPT": "Event history | AECPT",
         "Lịch sử sự kiện": "Event history",
+        "Lịch sử": "History",
         "Xem lại sự kiện và công việc từ dữ liệu ban Multimedia.": "Review events and tasks from the Multimedia team.",
         "Lọc theo năm": "Filter by year",
         "Tất cả năm": "All years",
@@ -55,7 +56,9 @@
         "Danh sách sự kiện": "Event list",
         "Không thể tải dữ liệu": "Unable to load data",
         "Đã hoàn thành": "Completed",
+        "Đã hoàn tất": "Completed",
         "Chưa hoàn thành": "Incomplete",
+        "Chưa hoàn tất": "Incomplete",
         "Đã hủy": "Cancelled",
         "Đang cập nhật": "Updating",
         "Không có sự kiện nào.": "There are no events.",
