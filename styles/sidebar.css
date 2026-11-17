@@ -818,8 +818,10 @@
 }
 
 .ace-chatbot-messages {
-    flex: 1;
+    flex: 1 1 0;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior-y: contain;
     padding: 14px 12px;
 }
 
@@ -936,6 +938,7 @@
 }
 
 .ace-chatbot-composer {
+    flex: 0 0 auto;
     min-height: 57px;
     display: flex;
     align-items: center;

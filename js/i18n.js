@@ -107,6 +107,33 @@
         "Nhập mật khẩu": "Enter your password",
         "Nhập họ và tên": "Enter your full name",
         "Tối thiểu 8 ký tự": "At least 8 characters",
+        "KHÔI PHỤC TÀI KHOẢN": "ACCOUNT RECOVERY",
+        "Đặt lại mật khẩu | AECPT": "Reset password | AECPT",
+        "Đặt lại mật khẩu": "Reset password",
+        "Chọn mật khẩu mới cho tài khoản của bạn.": "Choose a new password for your account.",
+        "Đang xác minh liên kết khôi phục...": "Verifying recovery link...",
+        "Quay lại đăng nhập": "Back to sign in",
+        "Liên kết không hợp lệ hoặc đã hết hạn. Hãy yêu cầu email khôi phục mới.": "This link is invalid or has expired. Request a new password recovery email.",
+        "Đặt lại mật khẩu thành công. Bạn có thể quay lại đăng nhập.": "Password reset successfully. You can now return to sign in.",
+        "Không thể xác minh liên kết khôi phục:": "Unable to verify recovery link:",
+        "Không cập nhật được mật khẩu:": "Unable to update password:",
+        "Email hoặc mật khẩu không chính xác. Vui lòng thử lại.": "The email or password is incorrect. Please try again.",
+        "Email này đã được đăng ký. Vui lòng đăng nhập hoặc dùng email khác.": "This email is already registered. Please sign in or use a different email.",
+        "Email chưa được xác nhận. Vui lòng kiểm tra hộp thư của bạn.": "Your email has not been confirmed. Please check your inbox.",
+        "Mật khẩu chưa đủ mạnh. Vui lòng chọn mật khẩu dài và an toàn hơn.": "Your password is not strong enough. Please choose a longer, more secure password.",
+        "Bạn thao tác quá nhiều lần. Vui lòng chờ một lúc rồi thử lại.": "Too many attempts. Please wait a moment and try again.",
+        "Không thể đăng nhập lúc này. Vui lòng thử lại.": "Unable to sign in right now. Please try again.",
+        "Không thể tạo tài khoản lúc này. Vui lòng thử lại.": "Unable to create an account right now. Please try again.",
+        "Không thể gửi email khôi phục lúc này. Vui lòng thử lại.": "Unable to send a recovery email right now. Please try again.",
+        "Đã xảy ra lỗi. Vui lòng thử lại.": "An error occurred. Please try again.",
+        "Vui lòng nhập email.": "Please enter your email.",
+        "Email không đúng định dạng. Ví dụ: ten@congty.com.": "Invalid email format. For example: name@company.com.",
+        "Vui lòng nhập mật khẩu.": "Please enter your password.",
+        "Nhập email hợp lệ để nhận liên kết đặt lại mật khẩu.": "Enter a valid email address to receive a password reset link.",
+        "Không kết nối được Supabase. Vui lòng tải lại trang.": "Could not connect to Supabase. Please reload the page.",
+        "Đang gửi...": "Sending...",
+        "Đang gửi email khôi phục...": "Sending recovery email...",
+        "Đã tiếp nhận yêu cầu. Nếu email có tài khoản, bạn sẽ nhận được liên kết đặt lại mật khẩu; nếu chưa đăng ký, sẽ không có email được gửi. Vì lý do bảo mật, hệ thống không xác nhận email có tài khoản hay không.": "Your request has been received. If an account exists for this email, you will receive a password reset link. If it is not registered, no email will be sent. For security reasons, we cannot confirm whether an account exists for this email.",
 
         "Thành viên | AECPT": "Members | AECPT",
         "Thành viên": "Members",
@@ -225,6 +252,7 @@
         "Không có phân công nào được cập nhật. Kiểm tra quyền truy cập.": "No assignments were updated. Check access permissions.",
         "Không thể tải dữ liệu": "Unable to load data",
         "Không thể tải dữ liệu từ Supabase.": "Unable to load data from Supabase.",
+        "Liên kết không hợp lệ": "Invalid link",
         "Không kết nối được Supabase. Hãy tải lại trang.": "Could not connect to Supabase. Please reload the page.",
         "Vui lòng nhập tên hiển thị.": "Please enter a display name.",
         "Mật khẩu cần có ít nhất 8 ký tự.": "The password must be at least 8 characters.",
@@ -239,6 +267,12 @@
         "Tài khoản chưa được liên kết với thành viên. Hãy thêm liên kết trong bảng team_members.": "This account is not linked to a member. Add a link in the team_members table.",
         "Không thể tải thông tin sự kiện.": "Unable to load event information.",
         "Không thể tải dữ liệu lịch sử:": "Unable to load event history:",
+        "Nhãn nộp bài": "Submission label",
+        "Số thứ tự": "Sequence number",
+        "Mã sự kiện": "Event ID",
+        "Đăng trên trang chính": "Published on the main page",
+        "Phương thức đăng": "Publishing method",
+        "Cờ chất lượng dữ liệu": "Data quality flag",
         "Tệp đính kèm": "Attachments",
         "Tải lên": "Upload",
         "Đã lưu link bài làm.": "Submission link saved.",
@@ -322,6 +356,7 @@
 
         "Cài đặt | AECPT": "Settings | AECPT",
         "Cài đặt": "Settings",
+        "Bật hoặc tắt chế độ tối": "Turn dark mode on or off",
         "Quản lý thông tin tài khoản và bảo mật của bạn.": "Manage your account information and security.",
         "Cài đặt thông báo": "Notification settings",
         "Tùy chỉnh thông báo và nhắc hạn cho tài khoản của bạn.": "Customize notifications and deadline reminders for your account.",
@@ -419,6 +454,31 @@
         "Danh sách công việc sẽ hiển thị tại đây khi có dữ liệu.": "Tasks will appear here when data is available.",
         "LỊCH SỬ TRÒ CHUYỆN": "CHAT HISTORY",
         "Không thể tải thanh điều hướng.": "Unable to load the navigation menu.",
+        "Trang web này làm được gì?": "What can this website do?",
+        "Cập nhật công việc sự kiện": "Update event tasks",
+        "Hướng dẫn dùng Timeline và quản lý công việc": "Guide to using the timeline and managing tasks",
+        "Tôi cần hỗ trợ khác": "I need other help",
+        "Hôm nay mình có những công việc nào cần hoàn thành?": "What tasks do I need to complete today?",
+        "Cho mình biết những deadline sắp tới.": "Tell me about upcoming deadlines.",
+        "Tôi muốn tạo timeline kế hoạch cho một sự kiện mới.": "I want to create a timeline for a new event.",
+        "Bạn có chắc muốn xóa": "Are you sure you want to remove",
+        "khỏi workspace?": "from the workspace?",
+        "Chào mừng bạn quay lại với ACE — AI Companion for Events.": "Welcome back to ACE — AI Companion for Events.",
+        "Chưa có thông báo.": "No notifications yet.",
+        "Khẩn cấp": "Urgent",
+        "Mức độ:": "Priority:",
+        "Mở công việc": "Open task",
+        "Đánh dấu đã đọc": "Mark all as read",
+        "Thu nhỏ": "Minimize",
+        "Bắt đầu lại": "Start over",
+        "Gợi ý câu hỏi": "Suggested questions",
+        "Nhắn tin cho ACE": "Message ACE",
+        "Nhắn tin cho ACE...": "Message ACE...",
+        "Không thể tải thông báo. Hãy thử tải lại trang.": "Unable to load notifications. Please try reloading the page.",
+        "Không thể tải thông báo mới. Hãy thử lại.": "Unable to load new notifications. Please try again.",
+        "Lịch sử trò chuyện": "Chat history",
+        "ACE chưa kết nối AI nên tin nhắn chưa được gửi hoặc lưu.": "ACE is not connected to AI, so your message was not sent or saved.",
+        "Không tìm thấy công việc trong lịch sử sự kiện.": "Task not found in event history.",
         "Chưa phân loại": "Uncategorized",
         "Chưa có hạn chót": "No deadline",
         "Chưa phân công": "Unassigned",
@@ -467,6 +527,8 @@
         if (match) return `${match[1]} events`;
         match = key.match(/^(\d+) công việc$/);
         if (match) return `${match[1]} ${Number(match[1]) === 1 ? "task" : "tasks"}`;
+        match = key.match(/^Bạn có (\d+) thông báo chưa đọc$/);
+        if (match) return `You have ${match[1]} unread ${Number(match[1]) === 1 ? "notification" : "notifications"}`;
         match = key.match(/^Còn (\d+) ngày$/);
         if (match) return `${match[1]} ${Number(match[1]) === 1 ? "day left" : "days left"}`;
         match = key.match(/^\+(\d+) công việc$/);
@@ -475,6 +537,70 @@
         if (match) return `${match[1]} ${Number(match[1]) === 1 ? "deadline" : "deadlines"} this ${match[2] === "tháng" ? "month" : match[2] === "tuần" ? "week" : "day"}`;
         match = key.match(/^(\d+) deadline trong ngày đã chọn$/);
         if (match) return `${match[1]} ${Number(match[1]) === 1 ? "deadline" : "deadlines"} on the selected day`;
+        match = key.match(/^Năm (\d+)$/);
+        if (match) return match[1];
+        match = key.match(/^Có (\d+) công việc đến hạn trong (\d+) ngày tới \(tính cả hôm nay\)\.$/);
+        if (match) return `${match[1]} tasks are due within the next ${match[2]} days, including today.`;
+        match = key.match(/^Đã hoàn thành (\d+)\/(\d+) công việc\.$/);
+        if (match) return `Completed ${match[1]} of ${match[2]} tasks.`;
+        match = key.match(/^Hiển thị (\d+)[–-](\d+) trong (\d+) công việc$/);
+        if (match) return `Showing ${match[1]}–${match[2]} of ${match[3]} tasks`;
+        match = key.match(/^Hiển thị (\d+)[–-](\d+) \/ (\d+) công việc$/);
+        if (match) return `Showing ${match[1]}–${match[2]} / ${match[3]} tasks`;
+        match = key.match(/^Có (\d+) công việc phù hợp$/);
+        if (match) return `${match[1]} matching tasks`;
+        match = key.match(/^Đã gửi (\d+) thông báo nhắc task đến thành viên được giao\.$/);
+        if (match) return `Sent ${match[1]} task reminders to assigned members.`;
+        match = key.match(/^Không thể gửi nhắc task:\s*(.*)$/);
+        if (match) return `Unable to send task reminders: ${match[1]}`;
+        match = key.match(/^Tất cả (\d+) phân công$/);
+        if (match) return `All ${match[1]} assignments`;
+        match = key.match(/^Thành viên nhóm (.+)$/);
+        if (match) return `Group members: ${match[1]}`;
+        match = key.match(/^Hạn (.+)$/);
+        if (match) return `Due ${match[1]}`;
+        match = key.match(/^(.+) có các khung giờ bị chồng lấn\.$/);
+        if (match) return `${translations[match[1]] || match[1]} has overlapping availability slots.`;
+        match = key.match(/^Không thể xóa vai trò "(.+)"\. Kiểm tra quyền member_roles \(RLS\)\.$/);
+        if (match) return `Unable to remove the "${match[1]}" role. Check member_roles (RLS) permissions.`;
+        match = key.match(/^Không thể đồng bộ vai trò "(.+)" thành "(.+)"\. Kiểm tra quyền member_roles \(RLS\)\.$/);
+        if (match) return `Unable to sync the "${match[1]}" role as "${match[2]}". Check member_roles (RLS) permissions.`;
+        match = key.match(/^Thông báo, (\d+) chưa đọc$/);
+        if (match) return `Notifications, ${match[1]} unread`;
+        match = key.match(/^Workspace của (.+)$/);
+        if (match) return `${match[1]}'s workspace`;
+        match = key.match(/^(.+) đã quá hạn \((.+)\)\.$/);
+        if (match) return `${match[1]} is overdue (${match[2]}).`;
+        match = key.match(/^(.+) sắp đến hạn \((.+)\)\.$/);
+        if (match) return `${match[1]} is due soon (${match[2]}).`;
+        match = key.match(/^Không tải được trạng thái ACE:\s*(.*)$/);
+        if (match) return `Unable to load ACE status: ${match[1]}`;
+        match = key.match(/^Không đặt lại được trạng thái ACE:\s*(.*)$/);
+        if (match) return `Unable to reset ACE status: ${match[1]}`;
+        match = key.match(/^Không thể tải sidebar: HTTP (\d+)$/);
+        if (match) return `Unable to load sidebar: HTTP ${match[1]}`;
+        match = key.match(/^Không thể tải dữ liệu:\s*(.*)$/);
+        if (match) return `Unable to load data: ${match[1]}`;
+        match = key.match(/^Lỗi:\s*(.*)$/);
+        if (match) return `Error: ${match[1]}`;
+        match = key.match(/^📊 KẾ HOẠCH & TIMELINE:\s*(.*)$/);
+        if (match) return `📊 PLAN & TIMELINE: ${match[1]}`;
+        match = key.match(/^✅ Số công việc đã lưu:\s*(.*)$/);
+        if (match) return `✅ Tasks saved: ${match[1]}`;
+        match = key.match(/^Đã chuyển sang sự kiện:\s*(.+)$/);
+        if (match) return `Switched to event: ${match[1]}`;
+        match = key.match(/^Đã tạo sự kiện (.+)\. Hãy cho AI biết thời gian và các công việc cần thực hiện để lập timeline\.$/);
+        if (match) return `Event ${match[1]} has been created. Tell the AI the schedule and tasks to build a timeline.`;
+        match = key.match(/^Không thể cập nhật:\s*(.*)$/);
+        if (match) return `Unable to update: ${match[1]}`;
+        match = key.match(/^Trễ hạn · (\d+) ngày$/);
+        if (match) return `${match[1]} days overdue`;
+        match = key.match(/^(Thứ [2-7]|Chủ nhật), ngày (.+)$/);
+        if (match) return `${translations[match[1]]}, ${match[2]}`;
+        match = key.match(/^Dữ liệu được cập nhật:\s*(.+)$/);
+        if (match) return `Data updated: ${match[1]}`;
+        match = key.match(/^(\d+) đã hoàn thành · (\d+) đang xử lý · (\d+) chưa bắt đầu · (\d+) đã hủy$/);
+        if (match) return `${match[1]} completed · ${match[2]} in progress · ${match[3]} not started · ${match[4]} cancelled`;
         match = key.match(/^(\d+) thành viên$/);
         if (match) return `${match[1]} ${Number(match[1]) === 1 ? "member" : "members"}`;
         match = key.match(/^Hiển thị (\d+) trong (\d+) thành viên$/);
@@ -489,8 +615,40 @@
         if (match) return `${match[1]} deadlines in ${match[2]} · showing start dates and progress from the database`;
         match = key.match(/^Trạng thái:\s*(.+)$/);
         if (match) return `Status: ${translations[match[1]] || match[1]}`;
+        match = key.match(/^Mức độ:\s*(.+)$/);
+        if (match) return `Priority: ${translations[match[1]] || match[1]}`;
+        match = key.match(/^Mã công việc:\s*(.+)$/);
+        if (match) return `Task ID: ${match[1]}`;
+        match = key.match(/^Công việc thuộc sự kiện\s*(.*)$/);
+        if (match) return `Tasks for event ${match[1]}`.trim();
+        match = key.match(/^Tổng thời lượng tối thiểu:\s*(.+) giờ$/);
+        if (match) return `Minimum total duration: ${match[1]} hours`;
         match = key.match(/^Người phụ trách:\s*(.+)$/);
         if (match) return `Assignee: ${match[1]}`;
+        match = key.match(/^Tên tài khoản đã đổi nhưng không đồng bộ được hồ sơ thành viên:\s*(.*)$/);
+        if (match) return `The account name changed, but the member profile could not be updated: ${match[1]}`;
+        match = key.match(/^Không lưu được:\s*(.*)$/);
+        if (match) return `Unable to save: ${match[1]}`;
+        match = key.match(/^Không đổi được mật khẩu:\s*(.*)$/);
+        if (match) return `Unable to change password: ${match[1]}`;
+        match = key.match(/^Đăng xuất chưa thành công:\s*(.*)$/);
+        if (match) return `Unable to sign out: ${match[1]}`;
+        match = key.match(/^Không lưu được thời gian rảnh:\s*(.*)$/);
+        if (match) return `Unable to save availability: ${match[1]}`;
+        match = key.match(/^Không thể xóa thành viên khỏi workspace:\s*(.*)$/);
+        if (match) return `Unable to remove member from the workspace: ${match[1]}`;
+        match = key.match(/^Không thể cập nhật thông tin:\s*(.*)$/);
+        if (match) return `Unable to update information: ${match[1]}`;
+        match = key.match(/^(.+) đã được xóa khỏi workspace\.$/);
+        if (match) return `${match[1]} was removed from the workspace.`;
+        match = key.match(/^Xác nhận hoàn tất sự kiện "(.+)"\?$/);
+        if (match) return `Confirm completing the event "${match[1]}"?`;
+        match = key.match(/^Đã chọn tệp: (.+)\. Tính năng gửi kèm tệp cho Gemini Flash sẽ được tích hợp trong bản cập nhật tới\.$/);
+        if (match) return `Selected file: ${match[1]}. Attaching files to Gemini Flash will be available in a future update.`;
+        match = key.match(/^Không thể xác minh liên kết khôi phục:\s*(.*)$/);
+        if (match) return `Unable to verify recovery link: ${match[1]}`;
+        match = key.match(/^Không cập nhật được mật khẩu:\s*(.*)$/);
+        if (match) return `Unable to update password: ${match[1]}`;
         match = key.match(/^Không thể tải dữ liệu lịch sử:\s*(.*)$/);
         if (match) return `Unable to load event history: ${match[1]}`;
         match = key.match(/^Không thể tạo sự kiện:\s*(.*)$/);
@@ -524,7 +682,7 @@
     }
 
     function translateElementAttributes(element) {
-        ["placeholder", "title", "aria-label", "alt"].forEach(attribute => {
+        ["placeholder", "title", "aria-label", "alt", "data-prompt"].forEach(attribute => {
             if (!element.hasAttribute(attribute)) return;
             let sources = attributeSources.get(element);
             if (!sources) {
