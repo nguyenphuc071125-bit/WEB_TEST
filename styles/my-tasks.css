@@ -621,6 +621,7 @@ button.stat-card {
     white-space: nowrap;
 }
 
+.task-table td:last-child { text-align: center; }
 .task-table tbody tr:last-child td { border-bottom: 0; }
 .task-table tbody tr:hover { background: #FAFAFF; }
 .task-name-cell { font-weight: 600; }
@@ -665,7 +666,9 @@ button.stat-card {
 .table-action-btn {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 4px;
+    width: 100%;
     border: 0;
     background: transparent;
     color: var(--primary-dark);
@@ -999,6 +1002,16 @@ button.stat-card {
 .task-comments-section { padding-top: 16px; border-top: 1px solid var(--border); }
 .comment-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 13px; }
 .comment-item { display: flex; gap: 9px; }
+.my-task-comment-replies {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0 0 14px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+}
+.comment-status { margin: 0 0 9px; color: var(--text-secondary); font-size: 9px; }
+.comment-status.is-error { color: var(--danger); }
 .comment-avatar {
     width: 27px;
     height: 27px;
@@ -1047,6 +1060,11 @@ button.stat-card {
     background: var(--white);
 }
 .detail-footer-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.detail-footer-row.single-action { grid-template-columns: 1fr; }
+.detail-footer-row.single-action .primary-action {
+    width: min(100%, 306px);
+    justify-self: center;
+}
 .primary-action, .secondary-action {
     min-height: 38px;
     padding: 0 14px;

@@ -14,6 +14,7 @@ const state = {
     filteredTasks: [],
     selectedTask: null,
     detailHistory: [],
+    commentRequestId: 0,
     status: "all",
     overdueOnly: false,
     isTeamLeader: false,
@@ -249,6 +250,7 @@ function normalizeTask(task, assignments, attachments) {
 
     return {
         id: task.task_id,
+        workspaceId: task.workspace_id,
         taskNo: task.task_no,
         eventId: task.event_id,
         submissionLabel: task.submission_label || "",
@@ -459,7 +461,7 @@ async function loadMyTasks() {
         const { data: tasks, error: tasksError } = await state.db
             .from("tasks")
             .select(`
-                task_id, task_no, event_id, task_title, task_type,
+                task_id, workspace_id, task_no, event_id, task_title, task_type,
                 submission_label, description, on_air_date, on_air_time,
                 on_air_at, package_deadline_date, package_deadline_time,
                 package_deadline_at, posted_on_main_page, post_method,
@@ -776,6 +778,45 @@ function openTaskDetail(taskId, navigation = "root") {
     state.selectedTask = task;
     renderTaskDetail(task);
     openModal(el.detailModal);
+    loadMyTaskComments(task);
+    refreshTaskAttachments(task).catch(error => {
+        console.error("Không thể tải sản phẩm của công việc:", error);
+        if (state.selectedTask !== task) return;
+        const productList = document.getElementById("submissionLinkSaved");
+        if (productList) {
+            productList.innerHTML = '<p class="attachment-empty">Không thể tải sản phẩm. Vui lòng thử lại.</p>';
+        }
+    });
+}
+
+async function refreshTaskAttachments(task) {
+    const { data, error } = await state.db
+        .from("task_attachments")
+        .select("attachment_id, task_id, file_name, file_url, file_type, file_size, uploaded_by, created_at")
+        .eq("task_id", task.id)
+        .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    const visibleAttachments = data || [];
+    const visibleUrls = new Set(visibleAttachments.map(attachment =>
+        `${attachment.uploaded_by}:${attachment.file_url}`
+    ));
+    const pendingAttachments = (task.attachments || []).filter(attachment =>
+        !attachment.attachment_id &&
+        !visibleUrls.has(`${attachment.uploaded_by}:${attachment.file_url}`)
+    );
+    task.attachments = [...pendingAttachments, ...visibleAttachments];
+
+    if (state.selectedTask !== task) return;
+    const hasAssignment = task.assignments.some(assignment =>
+        String(assignment.member_id) === String(state.memberId)
+    );
+    const productList = document.getElementById("submissionLinkSaved");
+    if (productList) {
+        productList.innerHTML = renderSavedAttachments(task.attachments, hasAssignment);
+        refreshIcons();
+    }
 }
 
 function goBackToPreviousTask() {
@@ -793,13 +834,105 @@ function renderSavedAttachments(attachments, canDelete = true) {
             const item = safeUrl
                 ? `<a class="attachment-item" href="${escapeHTML(safeUrl)}" target="_blank" rel="noopener noreferrer">${content}</a>`
                 : `<div class="attachment-item">${content}</div>`;
-            const deleteButton = canDelete && String(attachment.uploaded_by) === String(state.memberId)
+            const deleteButton = canDelete && attachment.attachment_id &&
+                String(attachment.uploaded_by) === String(state.memberId)
                 ? `<button type="button" class="attachment-delete" data-delete-attachment="${escapeHTML(attachment.attachment_id)}" aria-label="Xóa ${escapeHTML(attachment.file_name || "link bài làm")}">Xóa</button>`
                 : "";
 
             return `<div class="attachment-row">${item}${deleteButton}</div>`;
         }).join("")
         : '<p class="attachment-empty">Chưa có sản phẩm hoặc link nào được lưu cho công việc.</p>';
+}
+
+function renderMyTaskComments(comments = []) {
+    const list = document.getElementById("myTaskCommentList");
+    const count = document.getElementById("myTaskCommentCount");
+    if (!list) return;
+
+    if (count) {
+        count.textContent = String(comments.filter(comment => !comment.is_deleted).length);
+    }
+    if (!comments.length) {
+        list.innerHTML = '<p class="comment-empty">Chưa có bình luận nào.</p>';
+        return;
+    }
+
+    const commentsById = new Map(comments.map(comment =>
+        [String(comment.comment_id), comment]
+    ));
+    const repliesByParent = new Map();
+    comments.forEach(comment => {
+        if (!comment.parent_id || !commentsById.has(String(comment.parent_id))) return;
+        const parentId = String(comment.parent_id);
+        const replies = repliesByParent.get(parentId) || [];
+        replies.push(comment);
+        repliesByParent.set(parentId, replies);
+    });
+
+    function renderComment(comment) {
+        const authorName = comment.author_name || "Thành viên";
+        const initials = authorName.trim().slice(0, 1).toLocaleUpperCase("vi") || "T";
+        const createdAt = new Date(comment.created_at);
+        const timestamp = Number.isNaN(createdAt.getTime())
+            ? ""
+            : new Intl.DateTimeFormat(window.AppI18n?.locale || "vi-VN", {
+                dateStyle: "medium",
+                timeStyle: "short"
+            }).format(createdAt);
+        const replies = repliesByParent.get(String(comment.comment_id)) || [];
+
+        return `
+            <article class="comment-item${comment.is_deleted ? " is-deleted" : ""}">
+                <span class="comment-avatar" aria-hidden="true">${escapeHTML(initials)}</span>
+                <div class="comment-main">
+                    <div class="comment-heading">
+                        <strong>${escapeHTML(authorName)}</strong>
+                        <time datetime="${escapeHTML(comment.created_at || "")}">${escapeHTML(timestamp)}</time>
+                    </div>
+                    <p>${comment.is_deleted ? "Bình luận đã bị xóa." : escapeHTML(comment.content)}</p>
+                    ${replies.length
+                        ? `<div class="my-task-comment-replies">${replies.map(renderComment).join("")}</div>`
+                        : ""}
+                </div>
+            </article>`;
+    }
+
+    const roots = comments.filter(comment =>
+        !comment.parent_id || !commentsById.has(String(comment.parent_id))
+    );
+    list.innerHTML = roots.map(renderComment).join("");
+}
+
+async function loadMyTaskComments(task) {
+    const requestId = ++state.commentRequestId;
+    const list = document.getElementById("myTaskCommentList");
+    const status = document.getElementById("myTaskCommentStatus");
+    if (!list) return;
+
+    list.innerHTML = '<p class="comment-empty">Đang tải bình luận...</p>';
+    status.hidden = true;
+    status.textContent = "";
+
+    const { data, error } = await state.db
+        .from("task_comments")
+        .select("comment_id, parent_id, user_id, author_name, author_role, content, is_deleted, created_at")
+        .eq("task_id", task.id)
+        .eq("workspace_id", task.workspaceId)
+        .order("created_at", { ascending: true });
+
+    if (requestId !== state.commentRequestId || state.selectedTask !== task) return;
+    if (error) {
+        console.error("Không thể tải bình luận của công việc:", error);
+        list.innerHTML = "";
+        status.textContent = `Không thể tải bình luận: ${error.message}`;
+        status.hidden = false;
+        status.classList.add("is-error");
+        return;
+    }
+
+    status.textContent = "";
+    status.classList.remove("is-error");
+    renderMyTaskComments(data || []);
 }
 
 /* ==========================================
@@ -881,10 +1014,7 @@ function renderTaskDetail(task) {
 
         <section class="detail-section">
             <h3>Mô tả công việc</h3>
-
-            <p class="detail-description">
-                ${escapeHTML(task.description || "Chưa có mô tả.")}
-            </p>
+            <p class="detail-description">${escapeHTML(task.description || "Chưa có mô tả.")}</p>
         </section>
 
         <section class="detail-section">
@@ -923,9 +1053,7 @@ function renderTaskDetail(task) {
         </section>
         <section class="detail-section">
             <h3>Vai trò được phân công</h3>
-            <p class="detail-description">
-                ${escapeHTML(roles.join(", ") || "Chưa có vai trò")}
-            </p>
+            <p class="detail-description">${escapeHTML(roles.join(", ") || "Chưa có vai trò")}</p>
         </section>
 
         ${hasAssignment ? `<section class="detail-section submission-section">
@@ -947,6 +1075,16 @@ function renderTaskDetail(task) {
                 <p class="submission-link-hint">Link được lưu trong danh sách tệp đính kèm của công việc; hệ thống không tải tệp lên.</p>
             </form>
         </section>` : ""}
+        <section class="detail-section task-comments-section">
+            <div class="section-heading">
+                <h3>Bình luận</h3>
+                <span id="myTaskCommentCount">0</span>
+            </div>
+            <p class="comment-status" id="myTaskCommentStatus" role="status" hidden></p>
+            <div class="comment-list" id="myTaskCommentList">
+                <p class="comment-empty">Đang tải bình luận...</p>
+            </div>
+        </section>
     `;
 
     const statusInput = document.getElementById("taskStatusInput");
@@ -961,8 +1099,11 @@ function renderTaskDetail(task) {
     document.getElementById("startTaskBtn").hidden =
         !hasAssignment || task.status !== "not_started";
 
-    document.getElementById("completeTaskBtn").hidden =
+    const completeTaskButton = document.getElementById("completeTaskBtn");
+    completeTaskButton.hidden =
         !state.isTeamLeader || !hasAssignment || task.overallStatus === "completed";
+    document.querySelector(".detail-footer-row")
+        .classList.toggle("single-action", completeTaskButton.hidden);
     document.querySelector(".task-detail-footer").hidden = !hasAssignment;
 
     refreshIcons();
@@ -1030,7 +1171,7 @@ async function saveTaskSubmissionLink(event) {
     message.classList.remove("is-error", "is-success");
 
     try {
-        const { data, error } = await state.db
+        const { error } = await state.db
             .from("task_attachments")
             .insert({
                 task_id: task.id,
@@ -1038,13 +1179,20 @@ async function saveTaskSubmissionLink(event) {
                 file_url: submissionLink,
                 file_type: "text/uri-list",
                 uploaded_by: state.memberId
-            })
-            .select("attachment_id, task_id, file_name, file_url, file_type, file_size, uploaded_by, created_at")
-            .single();
+            });
 
         if (error) throw error;
-        if (!data) throw new Error("Supabase không trả về thông tin link vừa lưu.");
 
+        const data = {
+            attachment_id: null,
+            task_id: task.id,
+            file_name: fileName,
+            file_url: submissionLink,
+            file_type: "text/uri-list",
+            file_size: null,
+            uploaded_by: state.memberId,
+            created_at: new Date().toISOString()
+        };
         task.attachments = [data, ...(task.attachments || [])];
         document.getElementById("submissionLinkSaved").innerHTML =
             renderSavedAttachments(task.attachments);

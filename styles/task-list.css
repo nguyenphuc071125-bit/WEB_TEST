@@ -996,7 +996,6 @@ button.summary-card {
     color: #b94b52;
 }
 
-
 /* Group chip */
 
 .group-chip {
@@ -1483,6 +1482,16 @@ button.summary-card {
     gap: 8px;
 }
 
+.assignment-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+}
+
+.assignment-item {
+    width: 100%;
+}
+
 
 .attachment-item {
     min-width: 0;
@@ -1789,6 +1798,67 @@ button.summary-card {
     color: var(--text-muted);
 }
 
+.comment-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.comment-action-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 5px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 9px;
+    cursor: pointer;
+}
+
+.comment-action-button:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.comment-action-button svg {
+    width: 13px;
+    height: 13px;
+}
+
+.comment-action-button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.comment-delete-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.comment-delete-button:hover {
+    background: #fff0f0;
+    color: #b42318;
+}
+
+.comment-delete-button svg {
+    width: 13px;
+    height: 13px;
+}
+
 
 .comment-main p {
     color: var(--text-secondary);
@@ -1796,14 +1866,51 @@ button.summary-card {
     line-height: 1.6;
 }
 
+.comment-replies {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 12px;
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+}
+
+.comment-replies .comment-avatar {
+    width: 25px;
+    height: 25px;
+    min-width: 25px;
+}
+
+.comment-reply-target {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 12px;
+    color: var(--text-muted);
+    font-size: 10px;
+}
+
+.comment-reply-target[hidden] {
+    display: none;
+}
+
+.comment-reply-target button {
+    border: 0;
+    background: transparent;
+    color: var(--primary);
+    font: inherit;
+    cursor: pointer;
+}
+
 
 /* Comment form */
 
 .comment-form {
     display: flex;
-    align-items: center;
+    align-items: stretch;
 
-    height: 39px;
+    min-height: 46px;
 
     margin-top: 15px;
 
@@ -1819,27 +1926,30 @@ button.summary-card {
 }
 
 
-.comment-form input {
+.comment-form textarea {
     flex: 1;
     min-width: 0;
 
-    height: 100%;
+    min-height: 44px;
 
-    padding: 0 11px;
+    padding: 10px 11px;
 
     border: none;
     outline: none;
+    resize: vertical;
 
     color: var(--text-primary);
     background: transparent;
 
     font-size: 11px;
+    font-family: inherit;
 }
 
 
 .comment-form button {
     width: 40px;
-    height: 100%;
+    min-height: 44px;
+    flex-shrink: 0;
 
     display: flex;
     align-items: center;
@@ -1854,6 +1964,42 @@ button.summary-card {
 
 .comment-form button:hover {
     background: var(--primary-light);
+}
+
+.comment-form button:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.comment-form button svg {
+    width: 16px;
+    height: 16px;
+}
+
+.comment-status {
+    margin-bottom: 10px;
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.comment-status.is-error {
+    color: var(--danger, #c2413b);
+}
+
+.comment-item.is-deleted .comment-avatar {
+    opacity: 0.6;
+}
+
+.drawer-footer .btn svg {
+    width: 15px;
+    height: 15px;
+    margin-right: 6px;
+    flex-shrink: 0;
+}
+
+.drawer-footer .btn[hidden] {
+    display: none;
 }
 
 

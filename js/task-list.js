@@ -31,7 +31,7 @@
     tableInfo: $("#taskTableInfo"), previous: $("#previousPage"),
     next: $("#nextPage"), pageLabel: $("#currentPageLabel"),
     detailModal: $("#taskDetailModal"), detailTitle: $("#detailDrawerTitle"),
-    detail: $("#taskDetailContent"), viewFull: $("#viewFullTaskBtn"),
+    detail: $("#taskDetailContent"),
     updateButton: $("#openUpdateProgress"), progressModal: $("#updateProgressModal"),
     progressTitle: $("#progressTaskTitle"), progressGroup: $("#progressTaskGroup"),
     form: $("#updateProgressForm"), status: $("#taskStatusInput")
@@ -40,15 +40,19 @@
   const state = {
     db: null, memberId: null, tasks: [], filtered: [], memberNames: new Map(), memberEmails: new Map(),
     group: "", status: "all", overdueOnly: false, isTeamLeader: false,
+    currentUser: null, currentUserId: null, membershipWorkspaceId: null,
+    accountRole: "",
     page: 1, selected: null, detailHistory: [], selectedDeadlineTaskIds: new Set(),
-    deadlineWindowDays: 3
+    deadlineWindowDays: 3, commentRequestId: 0, commentRows: [],
+    replyParentId: null
   };
 
   const STATUS = {
     not_started: "Chưa bắt đầu",
     in_progress: "Đang thực hiện",
     pending_review: "Chờ duyệt",
-    completed: "Đã hoàn thành"
+    completed: "Đã hoàn thành",
+    cancelled: "Đã hủy"
   };
 
   function client() {
@@ -209,7 +213,7 @@
 
   function taskStatus(task) {
     const list = (task.assignments || []).filter(a => a.member_id);
-    if (!list.length) return "not_started";
+    if (!list.length) return task.status || "not_started";
     if (list.every(a => assignmentStatus(a) === "completed")) return "completed";
     if (list.some(a => assignmentStatus(a) === "in_progress")) return "in_progress";
     if (list.some(a => assignmentStatus(a) === "pending_review")) return "pending_review";
@@ -420,21 +424,23 @@
     showMessage("Đang tải danh sách công việc...");
     const [tasksResult, assignmentsResult, membersResult, eventsResult] = await Promise.all([
       state.db.from("tasks").select(`
-        task_id, task_no, event_id, task_title, task_type, submission_label,
+        task_id, task_no, event_id, task_title, task_type, submission_label, status,
         description, on_air_date, on_air_time, on_air_at,
         package_deadline_date, package_deadline_time, package_deadline_at,
         posted_on_main_page, post_method, is_cancelled, post_done, data_quality_flag
       `),
       state.db.from("task_assignments").select("task_id, role, assignment_state, member_id, is_done"),
       state.db.from("members").select("member_id, member_label, email"),
-      state.db.from("events").select("event_id, is_completed")
+      state.db.from("events").select("event_id, is_completed, workspace_id")
     ]);
 
     if (tasksResult.error) throw tasksResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
     if (membersResult.error) throw membersResult.error;
     if (eventsResult.error) throw eventsResult.error;
-
+    const eventsById = new Map((eventsResult.data || []).map(event =>
+      [String(event.event_id), event]
+    ));
     const activeEventIds = new Set((eventsResult.data || [])
       .filter(event => event.is_completed !== true)
       .map(event => String(event.event_id)));
@@ -469,6 +475,7 @@
 
     state.tasks = activeEventTasks.map(task => ({
       ...task,
+      workspace_id: eventsById.get(String(task.event_id))?.workspace_id,
       assignments: byTask.get(task.task_id) || [],
       attachments: attachmentsByTask.get(task.task_id) || []
     }));
@@ -597,6 +604,233 @@
     }
   }
 
+  function canCommentOnTask(task) {
+    return Boolean(
+      state.currentUserId &&
+      state.membershipWorkspaceId &&
+      task?.workspace_id &&
+      String(state.membershipWorkspaceId) === String(task.workspace_id)
+    );
+  }
+
+  function canDeleteTaskComment(comment, task) {
+    return Boolean(comment && !comment.is_deleted && (
+      String(comment.user_id) === String(state.currentUserId) ||
+      (state.isTeamLeader && canCommentOnTask(task))
+    ));
+  }
+
+  function commentStatus(message, isError = false) {
+    const status = dom.detail?.querySelector("#taskCommentStatus");
+    if (!status) return;
+    status.textContent = message;
+    status.hidden = !message;
+    status.classList.toggle("is-error", isError);
+  }
+
+  function renderTaskComments(comments) {
+    const list = dom.detail?.querySelector("#taskCommentList");
+    const count = dom.detail?.querySelector("#taskCommentCount");
+    if (!list) return;
+
+    const visibleComments = comments || [];
+    state.commentRows = visibleComments;
+    if (count) text(count, `${visibleComments.filter(comment => !comment.is_deleted).length}`);
+    if (!visibleComments.length) {
+      list.innerHTML = '<p class="comment-empty">Chưa có bình luận nào.</p>';
+      return;
+    }
+
+    const commentsById = new Map(visibleComments.map(comment =>
+      [String(comment.comment_id), comment]
+    ));
+    const repliesByParent = new Map();
+    visibleComments.forEach(comment => {
+      if (!comment.parent_id || !commentsById.has(String(comment.parent_id))) return;
+      const parentId = String(comment.parent_id);
+      const replies = repliesByParent.get(parentId) || [];
+      replies.push(comment);
+      repliesByParent.set(parentId, replies);
+    });
+
+    function renderComment(comment) {
+      const authorName = comment.author_name || "Thành viên";
+      const initials = authorName.trim().slice(0, 1).toLocaleUpperCase("vi") || "T";
+      const createdAt = new Date(comment.created_at);
+      const timestamp = Number.isNaN(createdAt.getTime())
+        ? ""
+        : new Intl.DateTimeFormat(window.AppI18n?.locale || "vi-VN", {
+          dateStyle: "medium", timeStyle: "short"
+        }).format(createdAt);
+      const canDelete = canDeleteTaskComment(comment, state.selected);
+      const replies = repliesByParent.get(String(comment.comment_id)) || [];
+      return `
+        <article class="comment-item${comment.is_deleted ? " is-deleted" : ""}">
+          <span class="comment-avatar" aria-hidden="true">${esc(initials)}</span>
+          <div class="comment-main">
+            <div class="comment-heading">
+              <strong>${esc(authorName)}</strong>
+              <span class="comment-actions">
+                <time datetime="${esc(comment.created_at || "")}">${esc(timestamp)}</time>
+                ${!comment.is_deleted ? `
+                  <button type="button" class="comment-action-button comment-reply-button"
+                    data-reply-to-comment="${esc(comment.comment_id)}"
+                    aria-label="Trả lời bình luận">
+                    <i data-lucide="reply"></i><span>Trả lời</span>
+                  </button>` : ""}
+                ${canDelete ? `
+                  <button type="button" class="comment-delete-button"
+                    data-delete-task-comment="${esc(comment.comment_id)}"
+                    aria-label="Xóa bình luận" title="Xóa bình luận">
+                    <i data-lucide="trash-2"></i>
+                  </button>` : ""}
+              </span>
+            </div>
+            <p>${comment.is_deleted ? "Bình luận đã bị xóa." : esc(comment.content)}</p>
+            ${replies.length
+              ? `<div class="comment-replies">${replies.map(renderComment).join("")}</div>`
+              : ""}
+          </div>
+        </article>`;
+    }
+
+    const rootComments = visibleComments.filter(comment =>
+      !comment.parent_id || !commentsById.has(String(comment.parent_id))
+    );
+    list.innerHTML = rootComments.map(renderComment).join("");
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  async function loadTaskComments(task) {
+    const requestId = ++state.commentRequestId;
+    if (!canCommentOnTask(task)) return;
+
+    const list = dom.detail?.querySelector("#taskCommentList");
+    if (list) list.innerHTML = '<p class="comment-empty">Đang tải bình luận...</p>';
+    commentStatus("");
+
+    const { data, error } = await state.db.from("task_comments")
+      .select("comment_id, parent_id, user_id, author_name, author_role, content, is_deleted, created_at")
+      .eq("task_id", task.task_id)
+      .eq("workspace_id", task.workspace_id)
+      .order("created_at", { ascending: true });
+
+    if (requestId !== state.commentRequestId || state.selected !== task) return;
+    if (error) {
+      console.error("[task-list] Không thể tải bình luận:", error);
+      commentStatus(`Không thể tải bình luận: ${error.message}`, true);
+      return;
+    }
+
+    renderTaskComments(data || []);
+    const count = dom.detail?.querySelector("#taskCommentCount");
+    if (count) text(count, `${(data || []).filter(comment => !comment.is_deleted).length}`);
+  }
+
+  async function submitTaskComment(event) {
+    event.preventDefault();
+    const task = state.selected;
+    if (!canCommentOnTask(task)) {
+      commentStatus("Bạn không có quyền bình luận trong workspace này.", true);
+      return;
+    }
+
+    const form = event.target;
+    const input = form.querySelector("#taskCommentInput");
+    const submitButton = form.querySelector("button[type='submit']");
+    const content = input?.value.trim();
+    if (!content) return;
+
+    submitButton.disabled = true;
+    commentStatus("Đang gửi bình luận...");
+    const metadata = state.currentUser?.user_metadata || {};
+    const emailName = state.currentUser?.email?.split("@")[0];
+    const authorName = metadata.full_name || metadata.name ||
+      state.memberNames.get(String(state.memberId)) || emailName || "Thành viên";
+    const { error } = await state.db.from("task_comments").insert({
+      task_id: task.task_id,
+      workspace_id: task.workspace_id,
+      user_id: state.currentUserId,
+      author_name: authorName,
+      author_avatar: metadata.avatar_url || metadata.picture || null,
+      author_role: state.accountRole || null,
+      content,
+      parent_id: state.replyParentId
+    });
+
+    if (error) {
+      console.error("[task-list] Không thể gửi bình luận:", error);
+      commentStatus(`Không thể gửi bình luận: ${error.message}`, true);
+      submitButton.disabled = false;
+      return;
+    }
+
+    input.value = "";
+    cancelTaskCommentReply();
+    await loadTaskComments(task);
+    if (state.selected === task) submitButton.disabled = false;
+  }
+
+  function startTaskCommentReply(commentId) {
+    const comment = state.commentRows.find(row =>
+      String(row.comment_id) === String(commentId)
+    );
+    if (!comment || comment.is_deleted) return;
+
+    state.replyParentId = comment.comment_id;
+    const target = dom.detail?.querySelector("#taskCommentReplyTarget");
+    const input = dom.detail?.querySelector("#taskCommentInput");
+    if (!target || !input) return;
+    target.querySelector("span").textContent = `Đang trả lời ${comment.author_name || "Thành viên"}`;
+    target.hidden = false;
+    input.placeholder = `Trả lời ${comment.author_name || "thành viên"}...`;
+    input.focus();
+  }
+
+  function cancelTaskCommentReply() {
+    state.replyParentId = null;
+    const target = dom.detail?.querySelector("#taskCommentReplyTarget");
+    const input = dom.detail?.querySelector("#taskCommentInput");
+    if (target) {
+      target.hidden = true;
+      target.querySelector("span").textContent = "";
+    }
+    if (input) input.placeholder = "Viết bình luận...";
+  }
+
+  async function deleteTaskComment(commentId) {
+    const task = state.selected;
+    const comment = state.commentRows.find(row =>
+      String(row.comment_id) === String(commentId)
+    );
+    if (!task || !canDeleteTaskComment(comment, task)) return;
+    if (!window.confirm("Bạn có chắc muốn xóa bình luận này không?")) return;
+
+    let deleteQuery = state.db.from("task_comments")
+      .delete()
+      .eq("comment_id", commentId)
+      .eq("task_id", task.task_id)
+      .eq("workspace_id", task.workspace_id);
+    if (!state.isTeamLeader) {
+      deleteQuery = deleteQuery.eq("user_id", state.currentUserId);
+    }
+
+    const { data, error } = await deleteQuery.select("comment_id");
+
+    if (error) {
+      console.error("[task-list] Không thể xóa bình luận:", error);
+      commentStatus(`Không thể xóa bình luận: ${error.message}`, true);
+      return;
+    }
+    if (!data?.length) {
+      commentStatus("Không thể xóa bình luận này. Kiểm tra quyền truy cập.", true);
+      return;
+    }
+
+    await loadTaskComments(task);
+    if (state.selected === task) commentStatus("Đã xóa bình luận.");
+  }
+
   function renderDetail(task) {
     const assignments = task.assignments || [];
     const roles = [...new Set(assignments.map(a => a.role).filter(Boolean))];
@@ -639,24 +873,7 @@
         </li>`;
       }).join("")}</ul>`
       : '<p class="attachment-empty">Công việc chưa có phân công.</p>';
-    const products = task.attachments?.length
-      ? `<div class="task-attachment-list">${task.attachments.map(attachment => {
-        const url = safeProductUrl(attachment.file_url);
-        const label = attachment.file_name || "Sản phẩm công việc";
-        const createdAt = attachment.created_at ? new Date(attachment.created_at) : null;
-        const timestamp = attachment.created_at
-          && createdAt && !Number.isNaN(createdAt.getTime())
-          ? new Intl.DateTimeFormat(window.AppI18n?.locale || "vi-VN", {
-            dateStyle: "medium", timeStyle: "short"
-          }).format(createdAt)
-          : "Chưa rõ ngày cập nhật";
-        return `<div class="task-attachment-row">
-          ${url
-            ? `<a class="attachment-item task-submission-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i><span><strong>${esc(label)}</strong><small>${esc(timestamp)}</small></span></a>`
-            : `<div class="attachment-item task-submission-link is-invalid"><i data-lucide="file-warning"></i><span><strong>${esc(label)}</strong><small>Liên kết không hợp lệ</small></span></div>`}
-        </div>`;
-      }).join("")}</div>`
-      : '<p class="attachment-empty">Chưa có sản phẩm hoặc link nào được lưu cho công việc.</p>';
+    const products = renderTaskProducts(task.attachments);
     text(dom.detailTitle, "Chi tiết công việc");
 
     dom.detail.innerHTML = `
@@ -681,7 +898,7 @@
       </section>
       <section class="detail-section">
         <h3>Sản phẩm của công việc</h3>
-        ${products}
+        <div id="taskProductList">${products}</div>
       </section>
       <div class="task-meta-grid">
         <div class="meta-item"><span>Mã công việc</span><strong>${esc(task.task_id)}</strong></div>
@@ -701,19 +918,75 @@
       </div>
       <section class="detail-section" style="margin-top:20px">
         <h4>Phân công theo vai trò</h4>
-        ${assignments.length ? `<div class="attachment-list">${assignments.map(a => `
-          <div class="attachment-item">
+        ${assignments.length ? `<div class="assignment-list">${assignments.map(a => `
+          <div class="attachment-item assignment-item">
             <span><strong>${esc(a.role)}</strong><small>${esc(memberLabel(a.member_id))} · ${STATUS[assignmentStatus(a)]}${a.assignment_state ? ` · ${esc(a.assignment_state)}` : ""}</small></span>
           </div>`).join("")}</div>` : `<p class="attachment-empty">Công việc chưa có phân công.</p>`}
       </section>
       <section class="detail-section">
         <h4>Thông tin chưa có trong database</h4>
         <p class="personal-note note-empty">Mức độ ưu tiên, người giao việc, phần trăm tiến độ, ghi chú và tệp đính kèm chưa có cột/bảng tương ứng trong schema hiện tại.</p>
-      </section>`;
+      </section>
+      ${canCommentOnTask(task) ? `
+        <section class="task-comments-section" id="taskCommentsSection" aria-labelledby="taskCommentsHeading">
+          <div class="section-heading">
+            <h4 id="taskCommentsHeading">Bình luận</h4>
+            <span id="taskCommentCount">0</span>
+          </div>
+          <p class="comment-status" id="taskCommentStatus" role="status" hidden></p>
+          <div class="comment-list" id="taskCommentList"></div>
+          <div class="comment-reply-target" id="taskCommentReplyTarget" hidden>
+            <span></span>
+            <button type="button" data-cancel-comment-reply>Hủy trả lời</button>
+          </div>
+          <form class="comment-form" id="taskCommentForm">
+            <textarea id="taskCommentInput" rows="2" maxlength="5000"
+              placeholder="Viết bình luận..." aria-label="Viết bình luận" required></textarea>
+            <button type="submit" aria-label="Gửi bình luận">
+              <i data-lucide="send"></i>
+            </button>
+          </form>
+        </section>` : ""}`;
     if (dom.updateButton) {
       dom.updateButton.hidden = !state.isTeamLeader;
-      dom.updateButton.disabled = !state.isTeamLeader || assignments.length === 0;
+      dom.updateButton.disabled = !state.isTeamLeader;
     }
+    if (window.lucide) window.lucide.createIcons();
+    if (canCommentOnTask(task)) loadTaskComments(task);
+  }
+
+  function renderTaskProducts(attachments = []) {
+    return attachments.length
+      ? `<div class="task-attachment-list">${attachments.map(attachment => {
+        const url = safeProductUrl(attachment.file_url);
+        const label = attachment.file_name || "Sản phẩm công việc";
+        const createdAt = attachment.created_at ? new Date(attachment.created_at) : null;
+        const timestamp = attachment.created_at
+          && createdAt && !Number.isNaN(createdAt.getTime())
+          ? new Intl.DateTimeFormat(window.AppI18n?.locale || "vi-VN", {
+            dateStyle: "medium", timeStyle: "short"
+          }).format(createdAt)
+          : "Chưa rõ ngày cập nhật";
+        return `<div class="task-attachment-row">
+          ${url
+            ? `<a class="attachment-item task-submission-link" href="${esc(url)}" target="_blank" rel="noopener noreferrer"><i data-lucide="external-link"></i><span><strong>${esc(label)}</strong><small>${esc(timestamp)}</small></span></a>`
+            : `<div class="attachment-item task-submission-link is-invalid"><i data-lucide="file-warning"></i><span><strong>${esc(label)}</strong><small>Liên kết không hợp lệ</small></span></div>`}
+        </div>`;
+      }).join("")}</div>`
+      : '<p class="attachment-empty">Chưa có sản phẩm hoặc link nào được lưu cho công việc.</p>';
+  }
+
+  async function refreshTaskProducts(task) {
+    const { data, error } = await state.db.from("task_attachments").select(
+      "attachment_id, task_id, file_name, file_url, file_type, file_size, uploaded_by, created_at"
+    ).eq("task_id", task.task_id).order("created_at", { ascending: false });
+    if (error) throw error;
+
+    task.attachments = data || [];
+    if (state.selected !== task) return;
+    const productList = dom.detail.querySelector("#taskProductList");
+    if (productList) productList.innerHTML = renderTaskProducts(task.attachments);
+    if (window.lucide) window.lucide.createIcons();
   }
 
   function openDetail(taskId, navigation = "root") {
@@ -724,9 +997,18 @@
     } else if (navigation === "root") {
       state.detailHistory = [];
     }
+    state.replyParentId = null;
     state.selected = task;
     renderDetail(task);
     openModal(dom.detailModal);
+    refreshTaskProducts(task).catch(error => {
+      console.error("Không thể tải sản phẩm của công việc:", error);
+      if (state.selected !== task) return;
+      const productList = dom.detail.querySelector("#taskProductList");
+      if (productList) {
+        productList.innerHTML = '<p class="attachment-empty">Không thể tải sản phẩm. Vui lòng thử lại.</p>';
+      }
+    });
   }
 
   function goBackToPreviousTask() {
@@ -741,29 +1023,42 @@
       alert("Chỉ trưởng nhóm mới có thể cập nhật trạng thái trong Danh sách công việc.");
       return;
     }
-    if (!task || !task.assignments?.length) {
-      alert("Công việc chưa có phân công để cập nhật trạng thái.");
-      return;
-    }
+    if (!task) return;
 
     const status = dom.status.value;
     const isDone = status === "completed";
-    const { data, error } = await state.db.from("task_assignments")
-      .update({
-        assignment_state: status,
-        is_done: isDone
-      })
+    const { data: taskData, error: taskError } = await state.db.from("tasks")
+      .update({ status })
       .eq("task_id", task.task_id)
       .select("task_id");
-
-    if (error) {
-      console.error(error);
-      alert(`Không thể cập nhật: ${error.message}`);
+    if (taskError) {
+      console.error("[task-list] Không thể cập nhật trạng thái công việc:", taskError);
+      alert(`Không thể cập nhật trạng thái công việc: ${taskError.message}`);
       return;
     }
-    if (!data?.length) {
-      alert("Không có phân công nào được cập nhật. Kiểm tra quyền truy cập.");
+    if (!taskData?.length) {
+      alert("Không có công việc nào được cập nhật. Kiểm tra quyền truy cập của trưởng nhóm.");
       return;
+    }
+
+    if (task.assignments?.length) {
+      const { data: assignmentData, error: assignmentError } = await state.db.from("task_assignments")
+        .update({
+          assignment_state: status,
+          is_done: isDone
+        })
+        .eq("task_id", task.task_id)
+        .select("task_id");
+      if (assignmentError || !assignmentData?.length) {
+        console.error("[task-list] Không thể đồng bộ trạng thái phân công:", assignmentError);
+        closeModal(dom.progressModal);
+        closeModal(dom.detailModal);
+        await loadData();
+        alert(
+          `Đã cập nhật trạng thái công việc, nhưng không thể đồng bộ trạng thái phân công${assignmentError ? `: ${assignmentError.message}` : "."}`
+        );
+        return;
+      }
     }
 
     closeModal(dom.progressModal);
@@ -773,10 +1068,12 @@
 
   function openProgress() {
     const task = state.selected;
-    if (!state.isTeamLeader || !task || !task.assignments?.length) return;
+    if (!state.isTeamLeader || !task) return;
 
     text(dom.progressTitle, task.task_title || task.task_id);
-    text(dom.progressGroup, `Tất cả ${task.assignments.length} phân công`);
+    text(dom.progressGroup, task.assignments?.length
+      ? `Tất cả ${task.assignments.length} phân công`
+      : "Công việc chưa có phân công");
     dom.status.value = taskStatus(task);
     openModal(dom.progressModal);
   }
@@ -886,6 +1183,20 @@
     });
     dom.remindSelectedTeamTasks?.addEventListener("click", remindSelectedTasks);
     dom.detail?.addEventListener("click", event => {
+      const replyButton = event.target.closest("[data-reply-to-comment]");
+      if (replyButton) {
+        startTaskCommentReply(replyButton.dataset.replyToComment);
+        return;
+      }
+      if (event.target.closest("[data-cancel-comment-reply]")) {
+        cancelTaskCommentReply();
+        return;
+      }
+      const deleteCommentButton = event.target.closest("[data-delete-task-comment]");
+      if (deleteCommentButton) {
+        deleteTaskComment(deleteCommentButton.dataset.deleteTaskComment);
+        return;
+      }
       if (event.target.closest("[data-back-task]")) {
         goBackToPreviousTask();
         return;
@@ -894,6 +1205,9 @@
       if (dependencyButton?.dataset.openDependency) {
         openDetail(dependencyButton.dataset.openDependency, "dependency");
       }
+    });
+    dom.detail?.addEventListener("submit", event => {
+      if (event.target.matches("#taskCommentForm")) submitTaskComment(event);
     });
 
     dom.previous?.addEventListener("click", () => {
@@ -911,13 +1225,6 @@
     }));
     dom.updateButton?.addEventListener("click", openProgress);
     dom.form?.addEventListener("submit", saveProgress);
-    dom.viewFull?.addEventListener("click", () => {
-      if (state.selected) {
-        const task = state.selected;
-        alert(`Mã công việc: ${task.task_id}\n${task.description || "Chưa có mô tả."}`);
-      }
-    });
-
     document.addEventListener("keydown", e => {
       if (e.key === "Escape") {
         closeModal(dom.progressModal);
@@ -951,17 +1258,21 @@
       const { data, error } = await state.db.auth.getSession();
       if (error) throw error;
       const user = data.session?.user;
+      state.currentUser = user || null;
+      state.currentUserId = user?.id || null;
       if (CONFIG.memberId) state.memberId = String(CONFIG.memberId);
 
       if (user) {
         const { data: membership, error: membershipError } = await state.db
           .from("team_members")
-          .select("member_id, account_role")
+          .select("member_id, account_role, workspace_id")
           .eq("user_id", user.id)
           .maybeSingle();
         if (membershipError) console.error("[task-list] Không thể tải vai trò tài khoản:", membershipError);
         const accountRole = String(membership?.account_role || user.app_metadata?.role || "")
           .trim().toLocaleLowerCase("vi");
+        state.accountRole = accountRole;
+        state.membershipWorkspaceId = membership?.workspace_id || null;
         state.isTeamLeader = ["leader", "team_leader", "trưởng nhóm"].includes(accountRole);
         state.memberId = state.memberId || membership?.member_id ||
           user?.user_metadata?.member_id || user?.app_metadata?.member_id || null;
