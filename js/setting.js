@@ -4,7 +4,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const input = document.getElementById(button.dataset.target);
             const isHidden = input.type === "password";
             input.type = isHidden ? "text" : "password";
-            button.textContent = isHidden ? "Ẩn" : "Hiện";
+            const label = isHidden ? "Ẩn" : "Hiện";
+            button.textContent = label;
             button.setAttribute("aria-label", isHidden ? "Ẩn mật khẩu" : "Hiện mật khẩu");
         });
     });

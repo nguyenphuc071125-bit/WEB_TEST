@@ -81,6 +81,7 @@
         "Mỗi việc, một bước tiến": "Every task is a step forward",
         "Cùng nhau hoàn thành": "Achieve more together",
         "Chào mừng trở lại!": "Welcome back!",
+        "CHÀO MỪNG TRỞ LẠI": "WELCOME BACK",
         "Đăng nhập vào không gian làm việc của ban Multimedia": "Sign in to the Multimedia team workspace",
         "TẠO TÀI KHOẢN": "CREATE ACCOUNT",
         "Đăng ký tài khoản": "Create an account",
@@ -378,6 +379,20 @@
         "Quản lý thông tin tài khoản và bảo mật của bạn.": "Manage your account information and security.",
         "Cài đặt thông báo": "Notification settings",
         "Tùy chỉnh thông báo và nhắc hạn cho tài khoản của bạn.": "Customize notifications and deadline reminders for your account.",
+        "Chế độ tối": "Dark mode",
+        "Đang tải thông báo...": "Loading notifications...",
+        "Đóng thông báo": "Close notification",
+        "Chưa có lịch sử chat": "No chat history",
+        "Bảng hiện tại chỉ lưu trạng thái chatbot, chưa lưu nội dung hội thoại.": "The current table stores chatbot state only and does not store conversation content.",
+        "Ẩn mật khẩu": "Hide password",
+        "Đang đăng xuất…": "Signing out…",
+        "Không thể tải công việc. Kiểm tra kết nối và quyền truy cập Supabase.": "Unable to load tasks. Check the Supabase connection and permissions.",
+        "Không thể tải sản phẩm. Vui lòng thử lại.": "Unable to load submissions. Please try again.",
+        "URL không hợp lệ": "Invalid URL",
+        "Không tìm thấy": "Not found",
+        "Chưa có lời mời.": "No invitations.",
+        "Xác nhận xóa thành viên": "Confirm member removal",
+        "Xác nhận xóa lần cuối": "Final removal confirmation",
         "Đang tải tài khoản…": "Loading account…",
         "Đang tải vai trò…": "Loading role…",
         "Thông báo": "Notifications",
@@ -740,6 +755,9 @@
 
         const select = document.getElementById("settingsLanguage");
         if (select) select.value = language;
+        window.dispatchEvent(new CustomEvent("app-language-changed", {
+            detail: { language, locale: language === "en" ? "en-US" : "vi-VN" }
+        }));
     }
 
     window.AppI18n = {

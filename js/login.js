@@ -29,7 +29,7 @@ function setAuthMode(mode) {
     document.querySelector(".system-note").hidden = isSignup;
 
     document.querySelector(".form-heading .welcom-lable").textContent =
-        isSignup ? "TẠO TÀI KHOẢN" : "WELCOME BACK";
+        isSignup ? "TẠO TÀI KHOẢN" : "CHÀO MỪNG TRỞ LẠI";
     document.querySelector(".form-heading h2").textContent =
         isSignup ? "Đăng ký tài khoản" : "Chào mừng trở lại!";
     document.querySelector(".form-heading p").textContent =
