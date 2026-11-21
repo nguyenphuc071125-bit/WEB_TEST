@@ -99,8 +99,6 @@
         detailDeadline: $("#calendarDetailDeadline"),
         detailOnAir: $("#calendarDetailOnAir"),
         detailDuration: $("#calendarDetailDuration"),
-        detailProgress: $("#calendarDetailProgress"),
-        detailProgressBar: $("#calendarDetailProgressBar"),
         detailNote: $("#calendarDetailNote"),
         closeDetailBtn: $("#closeCalendarDetailBtn"),
         openFullTaskBtn: $("#openFullTaskBtn")
@@ -1226,16 +1224,6 @@
             elements.detailDuration.textContent = start && deadline
                 ? `${Math.max(1, Math.ceil((startOfDay(deadline) - startOfDay(start)) / 86400000) + 1)} ngày`
                 : "Chưa đủ dữ liệu";
-        }
-
-        const progress = Math.max(0, Math.min(100, Number(task.progress) || 0));
-
-        if (elements.detailProgress) {
-            elements.detailProgress.textContent = `${progress}%`;
-        }
-
-        if (elements.detailProgressBar) {
-            elements.detailProgressBar.style.width = `${progress}%`;
         }
 
         if (elements.detailNote) {
